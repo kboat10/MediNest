@@ -575,11 +575,13 @@ class _DataManagementScreenState extends State<DataManagementScreen> {
             pw.Text('No health logs available.')
           else
             pw.Table.fromTextArray(
-              headers: ['Date', 'Description', 'Type'],
+              headers: ['Date', 'Description', 'Type', 'Feeling', 'Symptoms'],
               data: logs.map((log) => [
                 log.date.toIso8601String(),
                 log.description,
                 log.type,
+                log.feeling ?? '-',
+                (log.symptoms != null && log.symptoms!.isNotEmpty) ? log.symptoms!.join(', ') : '-',
               ]).toList(),
             ),
         ],

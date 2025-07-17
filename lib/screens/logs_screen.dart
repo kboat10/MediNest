@@ -18,10 +18,16 @@ class _LogsScreenState extends State<LogsScreen> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
   DateTime _selectedDate = DateTime.now();
+  final TextEditingController _feelingController = TextEditingController();
+  final List<String> _allSymptoms = [
+    'Headache', 'Fever', 'Nausea', 'Fatigue', 'Cough', 'Sore throat', 'Shortness of breath', 'Muscle pain', 'No symptoms',
+  ];
+  List<String> _selectedSymptoms = [];
 
   @override
   void dispose() {
     _searchController.dispose();
+    _feelingController.dispose();
     super.dispose();
   }
 
@@ -69,54 +75,120 @@ class _LogsScreenState extends State<LogsScreen> {
       loadingMessage: 'Updating logs...',
       child: Scaffold(
         appBar: AppBar(title: const Text('Health Logs')),
-        body: Column(
-          children: [
-            // Date picker
-            Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Row(
-                children: [
-                  const Text('Date:', style: TextStyle(fontWeight: FontWeight.bold)),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: InkWell(
-                      onTap: () async {
-                        final picked = await showDatePicker(
-                          context: context,
-                          initialDate: _selectedDate,
-                          firstDate: DateTime.now().subtract(const Duration(days: 365)),
-                          lastDate: DateTime.now().add(const Duration(days: 365)),
-                        );
-                        if (picked != null) {
-                          setState(() => _selectedDate = picked);
-                        }
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-                        decoration: BoxDecoration(
-                          border: Border.all(color: Colors.grey.shade300),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          '${_selectedDate.year}-${_selectedDate.month.toString().padLeft(2, '0')}-${_selectedDate.day.toString().padLeft(2, '0')}',
-                          style: const TextStyle(fontSize: 16),
+        body: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Date picker
+              Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Row(
+                  children: [
+                    const Text('Date:', style: TextStyle(fontWeight: FontWeight.bold)),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: InkWell(
+                        onTap: () async {
+                          final picked = await showDatePicker(
+                            context: context,
+                            initialDate: _selectedDate,
+                            firstDate: DateTime.now().subtract(const Duration(days: 365)),
+                            lastDate: DateTime.now().add(const Duration(days: 365)),
+                          );
+                          if (picked != null) {
+                            setState(() => _selectedDate = picked);
+                          }
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                          decoration: BoxDecoration(
+                            border: Border.all(color: Colors.grey.shade300),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            '${_selectedDate.year}-${_selectedDate.month.toString().padLeft(2, '0')}-${_selectedDate.day.toString().padLeft(2, '0')}',
+                            style: const TextStyle(fontSize: 16),
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                ],
-              ),
-            ),
-            // Medication checklist for the day
-            if (medications.isEmpty)
-              Expanded(
-                child: Center(
-                  child: Text('No medications scheduled. Add medications on the Schedule page.'),
+                  ],
                 ),
-              )
-            else
-              Expanded(
-                child: ListView.builder(
+              ),
+              // Feeling and symptoms input
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('How are you feeling today?', style: TextStyle(fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: _feelingController,
+                      decoration: const InputDecoration(
+                        hintText: 'Describe your feeling (e.g. Good, Tired, Anxious)',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    const Text('Select symptoms:', style: TextStyle(fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      children: _allSymptoms.map((symptom) {
+                        final selected = _selectedSymptoms.contains(symptom);
+                        return FilterChip(
+                          label: Text(symptom),
+                          selected: selected,
+                          onSelected: (val) {
+                            setState(() {
+                              if (val) {
+                                _selectedSymptoms.add(symptom);
+                              } else {
+                                _selectedSymptoms.remove(symptom);
+                              }
+                            });
+                          },
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 12),
+                    ElevatedButton.icon(
+                      icon: const Icon(Icons.add_comment),
+                      label: const Text('Add to Log'),
+                      onPressed: () async {
+                        if (_feelingController.text.trim().isEmpty && _selectedSymptoms.isEmpty) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Please enter a feeling or select at least one symptom.')),
+                          );
+                          return;
+                        }
+                        await healthData.addDailyFeelingLog(
+                          _selectedDate,
+                          _feelingController.text.trim(),
+                          List<String>.from(_selectedSymptoms),
+                        );
+                        setState(() {
+                          _feelingController.clear();
+                          _selectedSymptoms.clear();
+                        });
+                      },
+                    ),
+                  ],
+                ),
+              ),
+              // Medication checklist for the day
+              if (medications.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 32.0),
+                  child: Center(
+                    child: Text('No medications scheduled. Add medications on the Schedule page.'),
+                  ),
+                )
+              else
+                ListView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
                   itemCount: medications.length,
                   itemBuilder: (context, idx) {
                     final med = medications[idx];
@@ -178,22 +250,45 @@ class _LogsScreenState extends State<LogsScreen> {
                     );
                   },
                 ),
+              // Summary
+              Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Summary for the day:', style: TextStyle(fontWeight: FontWeight.bold)),
+                    ...medications.map((med) {
+                      final taken = getMedicationTakenStatus(logs, med, _selectedDate);
+                      return Text('${med.name}: ${taken == true ? 'Taken' : taken == false ? 'Missed' : 'Not logged'}');
+                    }).toList(),
+                    // Show latest daily log for the date
+                    Builder(
+                      builder: (context) {
+                        final dailyLogs = logs.where((l) => l.type == 'daily' && l.date.year == _selectedDate.year && l.date.month == _selectedDate.month && l.date.day == _selectedDate.day).toList();
+                        if (dailyLogs.isNotEmpty) {
+                          final log = dailyLogs.last;
+                          return Padding(
+                            padding: const EdgeInsets.only(top: 12.0),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text('Your feeling: ', style: TextStyle(fontWeight: FontWeight.bold)),
+                                Text(log.feeling ?? '-'),
+                                const SizedBox(height: 4),
+                                const Text('Symptoms: ', style: TextStyle(fontWeight: FontWeight.bold)),
+                                Text(log.symptoms != null && log.symptoms!.isNotEmpty ? log.symptoms!.join(', ') : '-'),
+                              ],
+                            ),
+                          );
+                        }
+                        return const SizedBox();
+                      },
+                    ),
+                  ],
+                ),
               ),
-            // Summary
-            Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Summary for the day:', style: TextStyle(fontWeight: FontWeight.bold)),
-                  ...medications.map((med) {
-                    final taken = getMedicationTakenStatus(logs, med, _selectedDate);
-                    return Text('${med.name}: ${taken == true ? 'Taken' : taken == false ? 'Missed' : 'Not logged'}');
-                  }).toList(),
-                ],
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

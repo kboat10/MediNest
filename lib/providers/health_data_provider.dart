@@ -449,23 +449,44 @@ class HealthDataProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> editLog(int index, String description, String type) async {
+  Future<void> editLog(int index, String description, String type, {String? feeling, List<String>? symptoms}) async {
     try {
       _setLoading(true);
       _clearError();
-      
       // Simulate async operation
       await Future.delayed(const Duration(milliseconds: 500));
-      
       _logs[index] = LogEntry(
         date: _logs[index].date,
         description: description,
         type: type,
+        feeling: feeling,
+        symptoms: symptoms,
       );
       await _saveData();
       notifyListeners();
     } catch (e) {
       _setError('Failed to edit log entry: ${e.toString()}');
+    } finally {
+      _setLoading(false);
+    }
+  }
+
+  Future<void> addDailyFeelingLog(DateTime date, String feeling, List<String> symptoms) async {
+    try {
+      _setLoading(true);
+      _clearError();
+      await Future.delayed(const Duration(milliseconds: 500));
+      _logs.add(LogEntry(
+        date: date,
+        description: 'Daily feeling and symptoms',
+        type: 'daily',
+        feeling: feeling,
+        symptoms: symptoms,
+      ));
+      await _saveData();
+      notifyListeners();
+    } catch (e) {
+      _setError('Failed to add daily feeling log: ${e.toString()}');
     } finally {
       _setLoading(false);
     }
