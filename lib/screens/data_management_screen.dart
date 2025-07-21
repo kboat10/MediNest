@@ -17,10 +17,8 @@ class DataManagementScreen extends StatefulWidget {
 }
 
 class _DataManagementScreenState extends State<DataManagementScreen> {
-  bool _isExporting = false;
   bool _isImporting = false;
   bool _isCreatingBackup = false;
-  bool _isRestoring = false;
 
   @override
   Widget build(BuildContext context) {
@@ -236,63 +234,6 @@ class _DataManagementScreenState extends State<DataManagementScreen> {
     );
   }
 
-  Future<void> _exportData() async {
-    setState(() {
-      _isExporting = true;
-    });
-
-    try {
-      final healthData = Provider.of<HealthDataProvider>(context, listen: false);
-      final preferences = Provider.of<UserPreferencesProvider>(context, listen: false);
-      
-      // Export health data
-      final healthDataJson = await healthData.exportData();
-      
-      // Export preferences
-      final preferencesData = {
-        'darkMode': preferences.isDarkMode,
-        'notificationsEnabled': preferences.notificationsEnabled,
-        'medicationReminders': preferences.medicationReminders,
-        'appointmentReminders': preferences.appointmentReminders,
-        'primaryColor': preferences.primaryColor.value,
-        'accentColor': preferences.accentColor.value,
-        'fontSize': preferences.fontSize,
-      };
-      
-      final exportData = {
-        'healthData': jsonDecode(healthDataJson),
-        'preferences': preferencesData,
-        'exportDate': DateTime.now().toIso8601String(),
-        'version': '1.0.0',
-      };
-      
-      final jsonString = jsonEncode(exportData);
-      final fileName = 'mymedbuddy_export_${DateTime.now().millisecondsSinceEpoch}.json';
-      
-      // Share the file
-      await Share.share(
-        jsonString,
-        subject: 'MyMedBuddy Data Export',
-      );
-      
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Data exported successfully')),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Export failed: ${e.toString()}')),
-        );
-      }
-    } finally {
-      setState(() {
-        _isExporting = false;
-      });
-    }
-  }
-
   Future<void> _importData() async {
     setState(() {
       _isImporting = true;
@@ -465,7 +406,7 @@ class _DataManagementScreenState extends State<DataManagementScreen> {
 
   Future<void> _restoreBackup(String backupKey) async {
     setState(() {
-      _isRestoring = true;
+      _isCreatingBackup = true; // Changed from _isRestoring to _isCreatingBackup
     });
 
     try {
@@ -485,7 +426,7 @@ class _DataManagementScreenState extends State<DataManagementScreen> {
       }
     } finally {
       setState(() {
-        _isRestoring = false;
+        _isCreatingBackup = false; // Changed from _isRestoring to _isCreatingBackup
       });
     }
   }

@@ -3,6 +3,8 @@ import '../services/shared_prefs_service.dart';
 import 'package:provider/provider.dart';
 import '../providers/health_data_provider.dart';
 import '../models/medication.dart';
+import '../providers/user_preferences_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({Key? key}) : super(key: key);
@@ -19,6 +21,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   List<Map<String, dynamic>> _medReminders = [
     {'name': TextEditingController(), 'time': null},
   ];
+  String? _selectedCondition;
 
   List<String> getTimeOptions() {
     final List<String> times = [];
@@ -70,8 +73,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           ));
         }
       }
+      final preferences = Provider.of<UserPreferencesProvider>(context, listen: false);
+      if (_selectedCondition != null) {
+        await preferences.setHealthCondition(_selectedCondition!);
+      }
       if (!mounted) return;
-      Navigator.pushReplacementNamed(context, '/home');
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('onboardingCompleted', true);
+      Navigator.pushReplacementNamed(context, '/auth');
     }
   }
 
@@ -91,12 +100,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 children: [
                   CircleAvatar(
                     radius: 40,
-                    backgroundColor: theme.primaryColor.withOpacity(0.1),
+                    backgroundColor: theme.primaryColor.withAlpha(51),
                     child: Icon(Icons.health_and_safety, size: 48, color: theme.primaryColor),
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    'Welcome to MyMedBuddy',
+                    'Welcome to MediNest',
                     style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 8),
@@ -135,6 +144,31 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                           validator: (value) => value == null || value.isEmpty ? 'Enter your age' : null,
                         ),
                         const SizedBox(height: 16),
+                        Consumer<UserPreferencesProvider>(
+                          builder: (context, preferences, _) {
+                            return Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 16.0),
+                              child: DropdownButtonFormField<String>(
+                                value: _selectedCondition,
+                                decoration: const InputDecoration(
+                                  labelText: 'Select your primary health condition',
+                                  border: OutlineInputBorder(),
+                                ),
+                                items: UserPreferencesProvider.supportedConditions.map((condition) {
+                                  return DropdownMenuItem<String>(
+                                    value: condition,
+                                    child: Text(condition),
+                                  );
+                                }).toList(),
+                                onChanged: (val) {
+                                  setState(() {
+                                    _selectedCondition = val;
+                                  });
+                                },
+                              ),
+                            );
+                          },
+                        ),
                         TextFormField(
                           controller: _conditionController,
                           decoration: const InputDecoration(

@@ -1,4 +1,7 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 class LogEntry {
+  final String? id; // For Firestore document ID
   final DateTime date;
   final String description;
   final String type;
@@ -6,6 +9,7 @@ class LogEntry {
   final List<String>? symptoms;
 
   LogEntry({
+    this.id,
     required this.date,
     required this.description,
     required this.type,
@@ -13,23 +17,24 @@ class LogEntry {
     this.symptoms,
   });
 
+  factory LogEntry.fromJson(Map<String, dynamic> json) {
+    return LogEntry(
+      id: json['id'],
+      date: (json['date'] as Timestamp).toDate(),
+      description: json['description'],
+      type: json['type'],
+      feeling: json['feeling'],
+      symptoms: json['symptoms'] != null ? List<String>.from(json['symptoms']) : null,
+    );
+  }
+
   Map<String, dynamic> toJson() {
     return {
-      'date': date.toIso8601String(),
+      'date': Timestamp.fromDate(date),
       'description': description,
       'type': type,
       'feeling': feeling,
       'symptoms': symptoms,
     };
-  }
-
-  factory LogEntry.fromJson(Map<String, dynamic> json) {
-    return LogEntry(
-      date: DateTime.parse(json['date']),
-      description: json['description'] ?? '',
-      type: json['type'] ?? '',
-      feeling: json['feeling'],
-      symptoms: (json['symptoms'] as List?)?.map((e) => e.toString()).toList(),
-    );
   }
 } 

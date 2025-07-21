@@ -10,8 +10,21 @@ class SettingsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Settings'),
-        elevation: 0,
+        title: const Text(
+          'MediNest',
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 24,
+            letterSpacing: 1.2,
+          ),
+        ),
+        centerTitle: true,
+        backgroundColor: Colors.transparent,
+        elevation: 2,
+        foregroundColor: Theme.of(context).colorScheme.onBackground,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(bottom: Radius.circular(24)),
+        ),
       ),
       body: Consumer<UserPreferencesProvider>(
         builder: (context, preferences, child) {
@@ -152,7 +165,7 @@ class SettingsScreen extends StatelessWidget {
                           NotificationService().showNotification(
                             id: 0,
                             title: 'Test Notification',
-                            body: 'This is a test notification from MyMedBuddy.',
+                            body: 'This is a test notification from MediNest.',
                           );
                         },
                       ),
@@ -206,6 +219,30 @@ class SettingsScreen extends StatelessWidget {
                       },
                     ),
                   ],
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 16.0, horizontal: 24.0),
+                child: DropdownButtonFormField<String>(
+                  value: preferences.healthCondition.isNotEmpty ? preferences.healthCondition : null,
+                  decoration: const InputDecoration(
+                    labelText: 'Health Condition',
+                    border: OutlineInputBorder(),
+                  ),
+                  items: UserPreferencesProvider.supportedConditions.map((condition) {
+                    return DropdownMenuItem<String>(
+                      value: condition,
+                      child: Text(condition),
+                    );
+                  }).toList(),
+                  onChanged: (val) async {
+                    if (val != null) {
+                      await preferences.setHealthCondition(val);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Health condition updated to $val.')),
+                      );
+                    }
+                  },
                 ),
               ),
             ],

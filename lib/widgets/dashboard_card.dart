@@ -35,8 +35,8 @@ class DashboardCard extends StatelessWidget {
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
               colors: [
-                cardColor.withOpacity(0.1),
-                cardColor.withOpacity(0.05),
+                cardColor.withAlpha(25),
+                cardColor.withAlpha(12),
               ],
             ),
           ),
@@ -46,7 +46,7 @@ class DashboardCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: cardColor.withOpacity(0.2),
+                  color: cardColor.withAlpha(51),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Icon(
@@ -65,7 +65,7 @@ class DashboardCard extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
-                        color: theme.textTheme.bodyMedium?.color?.withOpacity(0.7),
+                        color: theme.textTheme.bodyMedium?.color?.withAlpha(179),
                       ),
                     ),
                     const SizedBox(height: 4),
@@ -84,7 +84,7 @@ class DashboardCard extends StatelessWidget {
                 Icon(
                   Icons.arrow_forward_ios,
                   size: 16,
-                  color: theme.textTheme.bodyMedium?.color?.withOpacity(0.5),
+                  color: theme.textTheme.bodyMedium?.color?.withAlpha(128),
                 ),
             ],
           ),
@@ -128,8 +128,8 @@ class MedicationCard extends StatelessWidget {
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
               colors: [
-                color.withOpacity(0.1),
-                color.withOpacity(0.05),
+                color.withAlpha(25),
+                color.withAlpha(12),
               ],
             ),
           ),
@@ -139,7 +139,7 @@ class MedicationCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: color.withOpacity(0.2),
+                  color: color.withAlpha(51),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Icon(
@@ -158,7 +158,7 @@ class MedicationCard extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
-                        color: theme.textTheme.bodyMedium?.color?.withOpacity(0.7),
+                        color: theme.textTheme.bodyMedium?.color?.withAlpha(179),
                       ),
                     ),
                     const SizedBox(height: 4),
@@ -186,7 +186,7 @@ class MedicationCard extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: color.withOpacity(0.2),
+                    color: color.withAlpha(51),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(

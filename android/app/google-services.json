@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "899248237248",
+    "project_id": "medinest-4242d",
+    "storage_bucket": "medinest-4242d.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:899248237248:android:02dd0b69e7833466901b25",
+        "android_client_info": {
+          "package_name": "com.example.mymedbuddy"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAKUbPJvlY1efy083C54XWTvwTu3EHPvHc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

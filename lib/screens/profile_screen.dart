@@ -1,291 +1,230 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../models/user_profile.dart';
+import '../services/auth_service.dart';
+import '../providers/health_data_provider.dart';
 import '../providers/user_preferences_provider.dart';
+import '../widgets/loading_widget.dart';
 import 'settings_screen.dart';
 import 'data_management_screen.dart';
-import 'health_tips_screen.dart';
-import '../services/shared_prefs_service.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
+    final authService = Provider.of<AuthService>(context, listen: false);
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Profile'),
+        title: const Text('My Profile'),
+        backgroundColor: Colors.transparent,
         elevation: 0,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.settings),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const SettingsScreen()),
-              );
-            },
-            tooltip: 'Settings',
-          ),
-        ],
+        foregroundColor: Theme.of(context).textTheme.bodyLarge?.color,
       ),
-      body: FutureBuilder<Map<String, String?>> (
-        future: SharedPrefsService.loadUserData(),
-        builder: (context, snapshot) {
-          final userData = snapshot.data ?? {};
-          final name = userData['name'] ?? '';
-          final age = userData['age'] ?? '';
-          final condition = userData['condition'] ?? '';
-          final reminders = userData['reminders'] ?? '';
-          return Consumer<UserPreferencesProvider>(
-            builder: (context, preferences, child) {
-              return SingleChildScrollView(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
+      body: Consumer2<HealthDataProvider, UserPreferencesProvider>(
+        builder: (context, healthData, preferences, child) {
+          if (healthData.userProfile == null) {
+            return const LoadingWidget(message: 'Loading profile...');
+          }
+
+          final userProfile = healthData.userProfile!;
+
+          return SingleChildScrollView(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _ProfileHeader(
+                  userProfile: userProfile,
+                  onEdit: () => _showEditProfileDialog(context, userProfile),
+                ),
+                const SizedBox(height: 24),
+                _ActionCard(
                   children: [
-                    // Profile Header
-                    Card(
-                      margin: const EdgeInsets.only(bottom: 16),
-                      child: Padding(
-                        padding: const EdgeInsets.all(20),
-                        child: Column(
-                          children: [
-                            CircleAvatar(
-                              radius: 50,
-                              backgroundColor: preferences.primaryColor.withOpacity(0.2),
-                              child: Icon(
-                                Icons.person,
-                                size: 50,
-                                color: preferences.primaryColor,
-                              ),
-                            ),
-                            const SizedBox(height: 16),
-                            Text(
-                              name.isNotEmpty ? name : 'Your Name',
-                              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              condition.isNotEmpty ? condition : 'Patient',
-                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                color: Colors.grey[600],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
+                    _ActionTile(
+                      icon: Icons.settings_outlined,
+                      title: 'Settings',
+                      subtitle: 'App preferences & theme',
+                      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const SettingsScreen())),
                     ),
-                    // Remove the Quick Stats Row with Medications and Appointments
-                    const SizedBox(height: 16),
-                    // Profile Options
-                    Card(
-                      margin: const EdgeInsets.only(bottom: 16),
-                      child: Column(
-                        children: [
-                          ListTile(
-                            leading: Icon(
-                              Icons.settings,
-                              color: preferences.primaryColor,
-                            ),
-                            title: const Text('Settings'),
-                            subtitle: const Text('Customize your app experience'),
-                            trailing: const Icon(Icons.chevron_right),
-                            onTap: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(builder: (context) => const SettingsScreen()),
-                              );
-                            },
-                          ),
-                          const Divider(height: 1),
-                          ListTile(
-                            leading: Icon(
-                              Icons.storage,
-                              color: preferences.primaryColor,
-                            ),
-                            title: const Text('Data Management'),
-                            subtitle: const Text('Export, import, and backup data'),
-                            trailing: const Icon(Icons.chevron_right),
-                            onTap: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(builder: (context) => const DataManagementScreen()),
-                              );
-                            },
-                          ),
-                          const Divider(height: 1),
-                          ListTile(
-                            leading: Icon(
-                              Icons.notifications,
-                              color: preferences.primaryColor,
-                            ),
-                            title: const Text('Notifications'),
-                            subtitle: Text(
-                              preferences.notificationsEnabled ? 'Enabled' : 'Disabled',
-                            ),
-                            trailing: Switch(
-                              value: preferences.notificationsEnabled,
-                              onChanged: (value) => preferences.setNotificationsEnabled(value),
-                            ),
-                          ),
-                          const Divider(height: 1),
-                          ListTile(
-                            leading: Icon(
-                              preferences.isDarkMode ? Icons.dark_mode : Icons.light_mode,
-                              color: preferences.primaryColor,
-                            ),
-                            title: const Text('Dark Mode'),
-                            subtitle: const Text('Toggle dark theme'),
-                            trailing: Switch(
-                              value: preferences.isDarkMode,
-                              onChanged: (value) => preferences.setDarkMode(value),
-                            ),
-                          ),
-                        ],
-                      ),
+                    _ActionTile(
+                      icon: Icons.bar_chart_outlined,
+                      title: 'Data & Privacy',
+                      subtitle: 'Manage your health data',
+                      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const DataManagementScreen())),
                     ),
-                    // Health Information
-                    Card(
-                      margin: const EdgeInsets.only(bottom: 16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Padding(
-                            padding: const EdgeInsets.all(16),
-                            child: Text(
-                              'Health Information',
-                              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                          ListTile(
-                            leading: Icon(
-                              Icons.cake,
-                              color: Colors.purple,
-                            ),
-                            title: const Text('Age'),
-                            subtitle: Text(age.isNotEmpty ? age : 'Not set'),
-                          ),
-                          const Divider(height: 1),
-                          ListTile(
-                            leading: Icon(
-                              Icons.local_hospital,
-                              color: Colors.green,
-                            ),
-                            title: const Text('Condition'),
-                            subtitle: Text(condition.isNotEmpty ? condition : 'Not set'),
-                          ),
-                          const Divider(height: 1),
-                          ListTile(
-                            leading: Icon(
-                              Icons.alarm,
-                              color: Colors.blue,
-                            ),
-                            title: const Text('Medication Reminders'),
-                            subtitle: Text(reminders.isNotEmpty ? reminders : 'Not set'),
-                          ),
-                        ],
+                    _ActionTile(
+                      icon: Icons.notifications_outlined,
+                      title: 'Notifications',
+                      subtitle: preferences.notificationsEnabled ? 'Enabled' : 'Disabled',
+                      trailing: Switch(
+                        value: preferences.notificationsEnabled,
+                        onChanged: (value) => preferences.setNotificationsEnabled(value),
+                        activeColor: Theme.of(context).colorScheme.primary,
                       ),
-                    ),
-                    // Emergency Contacts
-                    Card(
-                      margin: const EdgeInsets.only(bottom: 16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Padding(
-                            padding: const EdgeInsets.all(16),
-                            child: Text(
-                              'Emergency Contacts',
-                              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                          ListTile(
-                            leading: CircleAvatar(
-                              backgroundColor: preferences.primaryColor.withOpacity(0.2),
-                              child: Icon(
-                                Icons.person,
-                                color: preferences.primaryColor,
-                              ),
-                            ),
-                            title: const Text('Jane Doe'),
-                            subtitle: const Text('Spouse • (555) 123-4567'),
-                            trailing: IconButton(
-                              icon: const Icon(Icons.phone),
-                              onPressed: () {
-                                // TODO: Implement phone call
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('Calling Jane Doe...')),
-                                );
-                              },
-                            ),
-                          ),
-                          const Divider(height: 1),
-                          ListTile(
-                            leading: CircleAvatar(
-                              backgroundColor: Colors.green.withOpacity(0.2),
-                              child: const Icon(
-                                Icons.local_hospital,
-                                color: Colors.green,
-                              ),
-                            ),
-                            title: const Text('Dr. Smith'),
-                            subtitle: const Text('Primary Care • (555) 987-6543'),
-                            trailing: IconButton(
-                              icon: const Icon(Icons.phone),
-                              onPressed: () {
-                                // TODO: Implement phone call
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('Calling Dr. Smith...')),
-                                );
-                              },
-                            ),
-                          ),
-                        ],
-                      ),
+                      onTap: () => preferences.setNotificationsEnabled(!preferences.notificationsEnabled),
                     ),
                   ],
                 ),
-              );
-            },
+                const SizedBox(height: 24),
+                ElevatedButton.icon(
+                  icon: const Icon(Icons.logout),
+                  label: const Text('Sign Out'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.red.shade400,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  onPressed: () async {
+                    await authService.signOut();
+                    Navigator.of(context).pushNamedAndRemoveUntil('/auth', (route) => false);
+                  },
+                ),
+              ],
+            ),
           );
         },
       ),
     );
   }
-  
-  Widget _buildStatCard(BuildContext context, String title, String value, IconData icon, Color color) {
+
+  void _showEditProfileDialog(BuildContext context, UserProfile userProfile) {
+    final formKey = GlobalKey<FormState>();
+    final nameController = TextEditingController(text: userProfile.name);
+    final healthData = Provider.of<HealthDataProvider>(context, listen: false);
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Edit Profile'),
+        content: Form(
+          key: formKey,
+          child: TextFormField(
+            controller: nameController,
+            decoration: const InputDecoration(labelText: 'Full Name'),
+            validator: (value) => (value == null || value.isEmpty) ? 'Please enter your name' : null,
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () {
+              if (formKey.currentState!.validate()) {
+                final updatedProfile = UserProfile(
+                  uid: userProfile.uid,
+                  name: nameController.text,
+                  email: userProfile.email,
+                );
+                healthData.updateUserProfile(updatedProfile);
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Profile updated successfully!')),
+                );
+              }
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ProfileHeader extends StatelessWidget {
+  final UserProfile userProfile;
+  final VoidCallback onEdit;
+
+  const _ProfileHeader({required this.userProfile, required this.onEdit});
+
+  @override
+  Widget build(BuildContext context) {
     return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(20.0),
         child: Column(
           children: [
-            Icon(
-              icon,
-              size: 32,
-              color: color,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              value,
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                fontWeight: FontWeight.bold,
-                color: color,
+            CircleAvatar(
+              radius: 45,
+              backgroundColor: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+              child: Text(
+                userProfile.name.isNotEmpty ? userProfile.name[0].toUpperCase() : 'U',
+                style: TextStyle(
+                  fontSize: 40,
+                  fontWeight: FontWeight.bold,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
               ),
             ),
+            const SizedBox(height: 16),
             Text(
-              title,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Colors.grey[600],
-              ),
+              userProfile.name,
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+              textAlign: TextAlign.center,
             ),
+            const SizedBox(height: 4),
+            Text(
+              userProfile.email,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.grey[600]),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+            TextButton.icon(
+              icon: const Icon(Icons.edit_outlined, size: 18),
+              label: const Text('Edit Profile'),
+              onPressed: onEdit,
+            )
           ],
         ),
       ),
+    );
+  }
+}
+
+class _ActionCard extends StatelessWidget {
+  final List<Widget> children;
+  const _ActionCard({required this.children});
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Column(
+        children: children,
+      ),
+    );
+  }
+}
+
+class _ActionTile extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+  final Widget? trailing;
+
+  const _ActionTile({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+    this.trailing,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      onTap: onTap,
+      leading: Icon(icon, color: Theme.of(context).colorScheme.primary),
+      title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
+      subtitle: Text(subtitle, style: TextStyle(color: Colors.grey[600])),
+      trailing: trailing ?? const Icon(Icons.chevron_right),
     );
   }
 } 

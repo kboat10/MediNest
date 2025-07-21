@@ -113,6 +113,89 @@ class _HealthTipsScreenState extends State<HealthTipsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final condition = Provider.of<UserPreferencesProvider>(context).healthCondition;
+    final Map<String, List<String>> conditionTips = {
+      'Sickle Cell Disease': [
+        'Drink plenty of water daily to prevent crises.',
+        'Avoid extreme temperatures and stress.',
+        'Take prescribed medications regularly.',
+        'Seek medical attention for fever or pain crises.',
+      ],
+      'Hypertension': [
+        'Monitor your blood pressure regularly.',
+        'Reduce salt intake and eat a balanced diet.',
+        'Exercise regularly and maintain a healthy weight.',
+        'Take your blood pressure medication as prescribed.',
+      ],
+      'Diabetes': [
+        'Monitor your blood sugar regularly.',
+        'Eat a healthy, balanced diet and avoid sugary foods.',
+        'Exercise regularly and maintain a healthy weight.',
+        'Take your diabetes medication or insulin as prescribed.',
+      ],
+      'Asthma': [
+        'Avoid known triggers and allergens.',
+        'Use your inhaler as prescribed.',
+        'Monitor your breathing and peak flow.',
+        'Seek help if you have difficulty breathing.',
+      ],
+      'Heart Disease': [
+        'Follow a heart-healthy diet.',
+        'Exercise regularly as advised by your doctor.',
+        'Take your heart medications as prescribed.',
+        'Monitor for chest pain or shortness of breath.',
+      ],
+      'Chronic Kidney Disease': [
+        'Limit salt and protein intake as advised.',
+        'Monitor your blood pressure and blood sugar.',
+        'Take medications as prescribed.',
+        'Attend all scheduled checkups.',
+      ],
+      'COPD': [
+        'Avoid smoking and air pollutants.',
+        'Take your inhalers and medications as prescribed.',
+        'Stay active but pace yourself.',
+        'Seek help if you have trouble breathing.',
+      ],
+      'Pregnancy': [
+        'Attend all prenatal appointments.',
+        'Eat a balanced diet and take prenatal vitamins.',
+        'Avoid alcohol, smoking, and certain medications.',
+        'Stay active with safe exercises.',
+      ],
+      'None': [
+        'Maintain a balanced diet and exercise regularly.',
+        'Get enough sleep and manage stress.',
+        'Stay hydrated and avoid smoking.',
+        'Visit your doctor for regular checkups.',
+      ],
+    };
+    final tips = (conditionTips[condition] ?? conditionTips['None']) ?? <String>[];
+    final Map<String, List<String>> newsKeywords = {
+      'Sickle Cell Disease': ['sickle cell', 'anemia', 'blood disorder'],
+      'Hypertension': ['hypertension', 'blood pressure'],
+      'Diabetes': ['diabetes', 'blood sugar', 'insulin'],
+      'Asthma': ['asthma', 'respiratory'],
+      'Heart Disease': ['heart', 'cardiac'],
+      'Chronic Kidney Disease': ['kidney', 'renal'],
+      'COPD': ['copd', 'lung', 'respiratory'],
+      'Pregnancy': ['pregnancy', 'prenatal', 'maternal'],
+      'None': [],
+    };
+    // Filter news and reminders by keywords if possible
+    List<Map<String, dynamic>> filteredNews = _healthNews;
+    List<Map<String, dynamic>> filteredReminders = _reminders;
+    final keywords = newsKeywords[condition] ?? [];
+    if (keywords.isNotEmpty) {
+      filteredNews = _healthNews.where((item) {
+        final title = (item['title'] ?? '').toString().toLowerCase();
+        return keywords.any((kw) => title.contains(kw));
+      }).toList();
+      filteredReminders = _reminders.where((item) {
+        final text = (item['text'] ?? '').toString().toLowerCase();
+        return keywords.any((kw) => text.contains(kw));
+      }).toList();
+    }
     return Scaffold(
       appBar: AppBar(
         title: const Text('Health Tips & Info'),
@@ -134,6 +217,63 @@ class _HealthTipsScreenState extends State<HealthTipsScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  Consumer<UserPreferencesProvider>(
+                    builder: (context, preferences, child) {
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Card(
+                            margin: const EdgeInsets.only(bottom: 16),
+                            elevation: 6,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                            child: Container(
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(24),
+                                gradient: LinearGradient(
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                  colors: condition == 'Hypertension'
+                                    ? [Color(0xFF7B1FA2), Color(0xFF512DA8)]
+                                    : condition == 'Diabetes'
+                                      ? [Color(0xFF009688), Color(0xFF43CEA2)]
+                                      : condition == 'Sickle Cell Disease'
+                                        ? [Color(0xFFD32F2F), Color(0xFFB71C1C)]
+                                        : [Color(0xFF232A34), Color(0xFF181C1F)],
+                                ),
+                              ),
+                              padding: const EdgeInsets.fromLTRB(28, 28, 28, 24),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Icon(Icons.info, color: Colors.white, size: 36),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Text(
+                                          condition.isNotEmpty && condition != 'None'
+                                            ? '$condition Advice'
+                                            : 'General Health Advice',
+                                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20, color: Colors.white),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 16),
+                                  ...tips.map((tip) => Padding(
+                                    padding: const EdgeInsets.only(bottom: 8),
+                                    child: Row(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        const Text('• ', style: TextStyle(fontSize: 16, color: Colors.white)),
+                                        Expanded(child: Text(tip, style: const TextStyle(fontSize: 16, color: Colors.white70))),
+                                      ],
+                                    ),
+                                  )),
+                                ],
+                              ),
+                            ),
+                          ),
                   // Daily Health Tip (Riverpod)
                   _buildSectionHeader(context, 'Daily Health Tip'),
                   riverpod.Consumer(
@@ -215,7 +355,7 @@ class _HealthTipsScreenState extends State<HealthTipsScreen> {
                                   child: CircularProgressIndicator(strokeWidth: 2),
                                 )
                               : const Icon(Icons.chevron_right),
-                          onTap: _isLoadingReminders ? null : () => _showRemindersDialog(),
+                                  onTap: _isLoadingReminders ? null : () => _showRemindersDialog(filteredReminders),
                         ),
                         const Divider(height: 1),
                         ListTile(
@@ -244,17 +384,17 @@ class _HealthTipsScreenState extends State<HealthTipsScreen> {
                     const Center(
                       child: CircularProgressIndicator(),
                     )
-                  else if (_healthNews.isEmpty)
+                          else if (filteredNews.isEmpty)
                     Card(
                       child: const Padding(
                         padding: EdgeInsets.all(16),
                         child: Center(
-                          child: Text('No health news available'),
+                                  child: Text('No health news available for your condition'),
                         ),
                       ),
                     )
                   else
-                    ..._healthNews.map((news) => Card(
+                            ...filteredNews.map((news) => Card(
                       margin: const EdgeInsets.only(bottom: 8),
                       child: ListTile(
                         title: Text(
@@ -352,6 +492,10 @@ class _HealthTipsScreenState extends State<HealthTipsScreen> {
                         ],
                       ),
                     ),
+                          ),
+                        ],
+                      );
+                    },
                   ),
                 ],
               ),
@@ -375,22 +519,22 @@ class _HealthTipsScreenState extends State<HealthTipsScreen> {
     );
   }
 
-  void _showRemindersDialog() {
+  void _showRemindersDialog(List<Map<String, dynamic>> filteredReminders) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Smart Reminders'),
         content: SizedBox(
           width: double.maxFinite,
-          child: _reminders.isEmpty
+          child: filteredReminders.isEmpty
               ? const Center(
                   child: Text('No reminders available'),
                 )
               : ListView.builder(
                   shrinkWrap: true,
-                  itemCount: _reminders.length,
+                  itemCount: filteredReminders.length,
                   itemBuilder: (context, index) {
-                    final reminder = _reminders[index];
+                    final reminder = filteredReminders[index];
                     return ListTile(
                       leading: Icon(
                         _getReminderIcon(reminder['type']),
@@ -487,6 +631,8 @@ class _HealthTipsScreenState extends State<HealthTipsScreen> {
 }
 
 class _SymptomCheckerWidget extends StatefulWidget {
+  const _SymptomCheckerWidget({Key? key}) : super(key: key);
+
   @override
   State<_SymptomCheckerWidget> createState() => _SymptomCheckerWidgetState();
 }
@@ -599,6 +745,8 @@ class _SymptomCheckerWidgetState extends State<_SymptomCheckerWidget> {
 }
 
 class _DrugLookupWidget extends StatefulWidget {
+  const _DrugLookupWidget({Key? key}) : super(key: key);
+
   @override
   State<_DrugLookupWidget> createState() => _DrugLookupWidgetState();
 }

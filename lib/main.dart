@@ -1,78 +1,65 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart' as provider;
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:provider/provider.dart';
+// Remove the conflicting flutter_riverpod import
+// import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'screens/onboarding_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/health_tips_screen.dart';
+import 'screens/auth_screen.dart';
 import 'services/shared_prefs_service.dart';
 import 'providers/health_data_provider.dart';
 import 'providers/user_preferences_provider.dart';
 import 'services/notification_service.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
+import './services/auth_service.dart';
+import './widgets/auth_wrapper.dart';
+import './services/firestore_service.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
-void main() async {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+  // Enable Firestore offline persistence
+  FirebaseFirestore.instance.settings = const Settings(persistenceEnabled: true);
   await NotificationService().init();
   if (await Permission.notification.isDenied) {
     await Permission.notification.request();
   }
-  final bool onboarded = await SharedPrefsService.isUserOnboarded();
   runApp(
-    ProviderScope(
-      child: provider.MultiProvider(
-        providers: [
-          provider.ChangeNotifierProvider(create: (_) => HealthDataProvider()),
-          provider.ChangeNotifierProvider(create: (_) => UserPreferencesProvider()),
-        ],
-        child: MyApp(onboarded: onboarded),
-      ),
+    MultiProvider(
+      providers: [
+        Provider<AuthService>(create: (_) => AuthService()),
+        Provider<FirestoreService>(create: (_) => FirestoreService()),
+        ChangeNotifierProvider(create: (_) => UserPreferencesProvider()),
+        // This provider depends on AuthService and FirestoreService
+        ChangeNotifierProxyProvider2<AuthService, FirestoreService, HealthDataProvider>(
+          create: (context) => HealthDataProvider(),
+          update: (context, auth, firestore, previousHealthData) =>
+              previousHealthData!..update(auth, firestore),
+        ),
+      ],
+      child: const MyApp(),
     ),
   );
 }
 
 class MyApp extends StatelessWidget {
-  final bool onboarded;
-  const MyApp({Key? key, required this.onboarded}) : super(key: key);
+  const MyApp({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return provider.Consumer<UserPreferencesProvider>(
+    return Consumer<UserPreferencesProvider>(
       builder: (context, preferences, child) {
         return MaterialApp(
-          title: 'MyMedBuddy',
-          theme: preferences.getThemeData().copyWith(
-            useMaterial3: true,
-            cardTheme: CardThemeData(
-              elevation: 2,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-            elevatedButtonTheme: ElevatedButtonThemeData(
-              style: ElevatedButton.styleFrom(
-                elevation: 2,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-              ),
-            ),
-            inputDecorationTheme: InputDecorationTheme(
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            ),
-            bottomNavigationBarTheme: BottomNavigationBarThemeData(
-              type: BottomNavigationBarType.fixed,
-              backgroundColor: preferences.isDarkMode ? Colors.grey[900] : Colors.white,
-              selectedItemColor: preferences.primaryColor,
-              unselectedItemColor: Colors.grey,
-              elevation: 8,
-            ),
-          ),
-          initialRoute: onboarded ? '/home' : '/onboarding',
+          title: 'MediNest',
+          theme: preferences.getThemeData(),
+          home: const AuthWrapper(),
           routes: {
+            '/auth': (context) => const AuthScreen(),
             '/onboarding': (context) => const OnboardingScreen(),
             '/home': (context) => const HomeScreen(),
             '/health_tips': (context) => const HealthTipsScreen(),
