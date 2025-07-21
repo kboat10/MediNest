@@ -12,7 +12,7 @@ import 'package:medinest/main.dart';
 void main() {
   testWidgets('Home screen displays Health Tips card', (WidgetTester tester) async {
     // Build the app and trigger a frame.
-    await tester.pumpWidget(const MyApp(onboarded: true));
+    await tester.pumpWidget(const MyApp());
     await tester.pumpAndSettle(); // Wait for all animations and async work
 
     // Look for the Health Tips card by its text

@@ -15,7 +15,7 @@ class _AuthScreenState extends State<AuthScreen> {
   String _email = '';
   String _passcode = '';
   bool _isLogin = true;
-  String _error = '';
+  String? _error;
 
   @override
   Widget build(BuildContext context) {
@@ -56,14 +56,14 @@ class _AuthScreenState extends State<AuthScreen> {
                 child: Text(_isLogin ? 'Login' : 'Sign Up'),
                 onPressed: () async {
                   if (_formKey.currentState!.validate()) {
-                    dynamic result;
+                    String? error;
                     if (_isLogin) {
-                      result = await authService.signInWithEmailAndPassword(_email, _passcode);
+                      error = await authService.signInWithEmailAndPassword(_email, _passcode);
                     } else {
-                      result = await authService.signUpWithEmailAndPassword(_email, _passcode);
+                      error = await authService.signUpWithEmailAndPassword(_email, _passcode);
                     }
-                    if (result == null) {
-                      setState(() => _error = 'Please supply a valid email and passcode.');
+                    if (error != null) {
+                      setState(() => _error = error);
                     }
                   }
                 },
@@ -74,9 +74,9 @@ class _AuthScreenState extends State<AuthScreen> {
                   setState(() => _isLogin = !_isLogin);
                 },
               ),
-              if (_error.isNotEmpty)
+              if (_error != null && _error!.isNotEmpty)
                 Text(
-                  _error,
+                  _error!,
                   style: const TextStyle(color: Colors.red, fontSize: 14),
                 ),
             ],
