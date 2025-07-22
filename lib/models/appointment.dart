@@ -17,20 +17,31 @@ class Appointment {
   
   // Update fromJson to accept 'id'
   factory Appointment.fromJson(Map<String, dynamic> json) {
+    DateTime parsedDateTime;
+    
+    // Handle both Firestore Timestamp and regular DateTime string
+    if (json['dateTime'] is Timestamp) {
+      parsedDateTime = (json['dateTime'] as Timestamp).toDate();
+    } else if (json['dateTime'] is String) {
+      parsedDateTime = DateTime.parse(json['dateTime']);
+    } else {
+      parsedDateTime = DateTime.now(); // Fallback
+    }
+    
     return Appointment(
       id: json['id'],
       title: json['title'],
-      dateTime: (json['dateTime'] as Timestamp).toDate(),
+      dateTime: parsedDateTime,
       location: json['location'],
       notes: json['notes'],
     );
   }
 
   // Update toJson to exclude 'id'
-  Map<String, dynamic> toJson() {
+  Map<String, dynamic> toJson({bool forFirestore = false}) {
     return {
       'title': title,
-      'dateTime': Timestamp.fromDate(dateTime),
+      'dateTime': forFirestore ? Timestamp.fromDate(dateTime) : dateTime.toIso8601String(),
       'location': location,
       'notes': notes,
     };

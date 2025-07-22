@@ -7,6 +7,13 @@ import 'package:intl/intl.dart';
 import '../models/medication.dart';
 import '../providers/user_preferences_provider.dart';
 
+enum MedicationStatus {
+  taken,
+  missed,
+  notDue,
+  notLogged,
+}
+
 class LogsScreen extends StatefulWidget {
   const LogsScreen({Key? key}) : super(key: key);
 
@@ -64,6 +71,116 @@ class _LogsScreenState extends State<LogsScreen> {
   // 2. Remove the old `getMedicationTakenStatus`, `_getLogTypeColor`, and `_showEditDialog` methods.
   // 3. Update the ListView.builder to directly check the log status.
   //    (This will be a larger change, including checkbox logic)
+
+  // Helper method to determine medication status
+  MedicationStatus _getMedicationStatus(HealthDataProvider healthData, Medication med, DateTime selectedDate) {
+    // Check if there's a log entry for this medication on the selected date
+    final logForMed = healthData.logs.firstWhere(
+      (l) => l.type == 'medication' &&
+             l.date.year == selectedDate.year &&
+             l.date.month == selectedDate.month &&
+             l.date.day == selectedDate.day &&
+             (l.description == 'Took ${med.name}' || l.description == 'Missed ${med.name}'),
+      orElse: () => LogEntry(id: null, date: DateTime.now(), description: '', type: ''), // Dummy
+    );
+
+    // If there's a log entry, return the status from the log
+    if (logForMed.id != null) {
+      return logForMed.description.startsWith('Took') 
+          ? MedicationStatus.taken 
+          : MedicationStatus.missed;
+    }
+
+    // If no log entry, determine status based on time
+    final now = DateTime.now();
+    final isToday = selectedDate.year == now.year && 
+                   selectedDate.month == now.month && 
+                   selectedDate.day == now.day;
+
+    if (!isToday) {
+      // For past dates without logs, consider as missed
+      if (selectedDate.isBefore(DateTime(now.year, now.month, now.day))) {
+        return MedicationStatus.missed;
+      }
+      // For future dates, show as not due yet
+      return MedicationStatus.notDue;
+    }
+
+    // For today, check if the medication time has passed
+    final timeStr = med.reminderTime ?? med.time;
+    final parsedTime = _parseTimeString(timeStr);
+    final medicationDateTime = DateTime(
+      selectedDate.year, 
+      selectedDate.month, 
+      selectedDate.day, 
+      parsedTime.hour, 
+      parsedTime.minute
+    );
+
+    if (now.isAfter(medicationDateTime)) {
+      return MedicationStatus.missed; // Time has passed, not logged
+    } else {
+      return MedicationStatus.notDue; // Time hasn't come yet
+    }
+  }
+
+  // Helper method to parse time string (e.g., "08:30 AM" -> TimeOfDay)
+  TimeOfDay _parseTimeString(String timeStr) {
+    try {
+      final parts = timeStr.split(' ');
+      final timePart = parts[0];
+      final period = parts.length > 1 ? parts[1].toUpperCase() : 'AM';
+      
+      final timeParts = timePart.split(':');
+      int hour = int.parse(timeParts[0]);
+      final minute = int.parse(timeParts[1]);
+      
+      if (period == 'PM' && hour != 12) {
+        hour += 12;
+      } else if (period == 'AM' && hour == 12) {
+        hour = 0;
+      }
+      
+      return TimeOfDay(hour: hour, minute: minute);
+    } catch (e) {
+      // Fallback to 8:00 AM if parsing fails
+      return const TimeOfDay(hour: 8, minute: 0);
+    }
+  }
+
+  // Helper method to get status display info
+  Map<String, dynamic> _getStatusDisplayInfo(MedicationStatus status) {
+    switch (status) {
+      case MedicationStatus.taken:
+        return {
+          'text': 'Took',
+          'color': Colors.green,
+          'icon': Icons.check_circle,
+          'checkboxValue': true,
+        };
+      case MedicationStatus.missed:
+        return {
+          'text': 'Missed',
+          'color': Colors.red,
+          'icon': Icons.cancel,
+          'checkboxValue': false,
+        };
+      case MedicationStatus.notDue:
+        return {
+          'text': 'Not due yet',
+          'color': Colors.blue,
+          'icon': Icons.schedule,
+          'checkboxValue': null,
+        };
+      case MedicationStatus.notLogged:
+        return {
+          'text': 'Not logged',
+          'color': Colors.grey,
+          'icon': Icons.help_outline,
+          'checkboxValue': null,
+        };
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -445,19 +562,45 @@ class _LogsScreenState extends State<LogsScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text('Summary for the day:', style: TextStyle(fontWeight: FontWeight.bold)),
+                const SizedBox(height: 8),
                 ...healthData.medications!.map((med) {
-                  final now = DateTime.now();
-                  // Parse med.reminderTime or med.time to DateTime for today
-                  String timeStr = med.reminderTime ?? med.time;
-                  final timeParts = timeStr.split(' ');
-                  final hm = timeParts[0].split(':');
-                  int hour = int.parse(hm[0]);
-                  int minute = int.parse(hm[1]);
-                  if (timeParts[1] == 'PM' && hour != 12) hour += 12;
-                  if (timeParts[1] == 'AM' && hour == 12) hour = 0;
-                  final medTime = DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day, hour, minute);
-                  final isPast = now.isAfter(medTime) && _selectedDate.year == now.year && _selectedDate.month == now.month && _selectedDate.day == now.day;
-                  return Text('${med.name}: ${isPast ? 'Missed' : 'Not logged'}');
+                  final status = _getMedicationStatus(healthData, med, _selectedDate);
+                  final displayInfo = _getStatusDisplayInfo(status);
+                  
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 2),
+                    child: Row(
+                      children: [
+                        Icon(
+                          displayInfo['icon'],
+                          size: 16,
+                          color: displayInfo['color'],
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            '${med.name}: ',
+                            style: const TextStyle(fontWeight: FontWeight.w500),
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: (displayInfo['color'] as Color).withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            displayInfo['text'],
+                            style: TextStyle(
+                              color: displayInfo['color'],
+                              fontWeight: FontWeight.w500,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
                 }).toList(),
                 // Show latest daily log for the date
                 Builder(
@@ -505,40 +648,86 @@ class _LogsScreenState extends State<LogsScreen> {
       itemCount: medications.length,
       itemBuilder: (context, idx) {
         final med = medications[idx];
-        // Directly find the log for the current med and date
-        final logForMed = healthData.logs!.firstWhere(
-          (l) => l.type == 'medication' &&
-                 l.date.year == _selectedDate.year &&
-                 l.date.month == _selectedDate.month &&
-                 l.date.day == _selectedDate.day &&
-                 (l.description == 'Took ${med.name}' || l.description == 'Missed ${med.name}'),
-          orElse: () => LogEntry(id: null, date: DateTime.now(), description: '', type: ''), // Dummy
-        );
-        final bool? taken = logForMed.id == null ? null : logForMed.description.startsWith('Took');
+        final status = _getMedicationStatus(healthData, med, _selectedDate);
+        final displayInfo = _getStatusDisplayInfo(status);
         
         return Card(
           margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+          elevation: 2,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           child: ListTile(
-            leading: Icon(Icons.medication, color: taken == null ? Colors.grey : (taken ? Colors.green : Colors.red)),
-            title: Text(med.name),
-            subtitle: Text('Time: ${med.time}'),
+            leading: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: (displayInfo['color'] as Color).withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(
+                displayInfo['icon'],
+                color: displayInfo['color'],
+                size: 24,
+              ),
+            ),
+            title: Text(
+              med.name,
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Time: ${med.time}'),
+                if (med.reminderTime != null && med.reminderTime != med.time)
+                  Text('Reminder: ${med.reminderTime}', 
+                       style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+              ],
+            ),
             trailing: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Checkbox(
-                  value: taken,
-                  tristate: true,
-                  onChanged: (val) async {
-                    await setMedicationTakenStatus(healthData, med, _selectedDate, val ?? false);
-                  },
-                  activeColor: Colors.green,
-                ),
-                if (taken == true)
-                  const Text('Took', style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
-                if (taken == false)
-                  const Text('Missed', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
-                if (taken == null)
-                  const Text('Not logged', style: TextStyle(color: Colors.grey)),
+                if (status == MedicationStatus.notDue)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.blue.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: Colors.blue.withOpacity(0.3)),
+                    ),
+                    child: Text(
+                      displayInfo['text'],
+                      style: TextStyle(
+                        color: displayInfo['color'],
+                        fontWeight: FontWeight.w500,
+                        fontSize: 12,
+                      ),
+                    ),
+                  )
+                else ...[
+                  Checkbox(
+                    value: displayInfo['checkboxValue'],
+                    tristate: true,
+                    onChanged: (val) async {
+                      if (val != null) {
+                        await setMedicationTakenStatus(healthData, med, _selectedDate, val);
+                      }
+                    },
+                    activeColor: Colors.green,
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: (displayInfo['color'] as Color).withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      displayInfo['text'],
+                      style: TextStyle(
+                        color: displayInfo['color'],
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                ],
               ],
             ),
           ),

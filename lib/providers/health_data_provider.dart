@@ -23,6 +23,11 @@ class HealthDataProvider extends ChangeNotifier {
   Map<String, int> _peakFlow = {};
   UserProfile? _userProfile;
   StreamSubscription? _profileSubscription;
+  
+  // Streak tracking data
+  Map<String, bool> _dailyMedicationCompletionStatus = {}; // date -> all meds taken
+  int _currentStreak = 0;
+  int _longestStreak = 0;
 
   // Services
   AuthService? _auth;
@@ -30,6 +35,7 @@ class HealthDataProvider extends ChangeNotifier {
   StreamSubscription? _medicationSubscription;
   StreamSubscription? _appointmentSubscription;
   StreamSubscription? _logSubscription;
+  StreamSubscription? _healthDataSubscription;
 
   // SharedPreferences keys
   static const String _medicationsKey = 'medications';
@@ -43,43 +49,72 @@ class HealthDataProvider extends ChangeNotifier {
   List<LogEntry> get logs => _logs ?? [];
   List<Appointment> get appointments => _appointments ?? [];
   UserProfile? get userProfile => _userProfile;
+  int get currentStreak => _currentStreak;
+  int get longestStreak => _longestStreak;
 
   Medication? get nextMedication {
     if (_medications == null || _medications!.isEmpty) return null;
-    return _medications!.firstWhere((m) => !m.taken, orElse: () => _medications!.first);
+    
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    
+    // Convert medications to list with parsed times
+    final medicationsWithTimes = _medications!.map((med) {
+      final timeStr = med.reminderTime ?? med.time;
+      final parsedTime = _parseTimeString(timeStr);
+      final todayScheduledTime = DateTime(today.year, today.month, today.day, parsedTime.hour, parsedTime.minute);
+      
+      return {
+        'medication': med,
+        'scheduledTime': todayScheduledTime,
+        'timeStr': timeStr,
+      };
+    }).toList();
+    
+    // First, try to find upcoming medications today
+    final upcomingToday = medicationsWithTimes
+        .where((item) => (item['scheduledTime'] as DateTime).isAfter(now))
+        .toList();
+    
+    if (upcomingToday.isNotEmpty) {
+      // Sort by time and return the earliest upcoming medication today
+      upcomingToday.sort((a, b) => (a['scheduledTime'] as DateTime).compareTo(b['scheduledTime'] as DateTime));
+      return upcomingToday.first['medication'] as Medication;
+    }
+    
+    // If no upcoming medications today, return the earliest medication for tomorrow
+    medicationsWithTimes.sort((a, b) => (a['scheduledTime'] as DateTime).compareTo(b['scheduledTime'] as DateTime));
+    return medicationsWithTimes.first['medication'] as Medication;
+  }
+  
+  // Helper method to parse time string (e.g., "08:30 AM" -> TimeOfDay)
+  TimeOfDay _parseTimeString(String timeStr) {
+    try {
+      final parts = timeStr.split(' ');
+      final timePart = parts[0];
+      final period = parts.length > 1 ? parts[1].toUpperCase() : 'AM';
+      
+      final timeParts = timePart.split(':');
+      int hour = int.parse(timeParts[0]);
+      final minute = int.parse(timeParts[1]);
+      
+      if (period == 'PM' && hour != 12) {
+        hour += 12;
+      } else if (period == 'AM' && hour == 12) {
+        hour = 0;
+      }
+      
+      return TimeOfDay(hour: hour, minute: minute);
+    } catch (e) {
+      // Fallback to 8:00 AM if parsing fails
+      return const TimeOfDay(hour: 8, minute: 0);
+    }
   }
   int get missedDoses => _logs?.where((l) => l.type == 'medication' && l.description.startsWith('Missed')).length ?? 0;
   int get weeklyAppointments => _appointments?.where((a) => a.dateTime.isAfter(DateTime.now()) && a.dateTime.isBefore(DateTime.now().add(Duration(days: 7)))).length ?? 0;
 
-  // Returns the number of consecutive days (ending today or yesterday) where all scheduled medications were taken
-  int get medicationStreak {
-    if (_medications == null || _medications!.isEmpty) return 0;
-    // Build a map of date -> set of taken medication names
-    final Map<DateTime, Set<String>> takenPerDay = {};
-    if (_logs != null) {
-      for (final log in _logs!) {
-        if (log.type == 'medication' && log.description.startsWith('Took ')) {
-          final medName = log.description.substring(5);
-          final date = DateTime(log.date.year, log.date.month, log.date.day);
-          takenPerDay.putIfAbsent(date, () => {}).add(medName);
-        }
-      }
-    }
-    // Find the streak
-    int streak = 0;
-    DateTime day = DateTime.now();
-    final allMedNames = _medications!.map((m) => m.name).toSet();
-    while (true) {
-      final taken = takenPerDay[DateTime(day.year, day.month, day.day)] ?? {};
-      if (taken.length == allMedNames.length) {
-        streak++;
-        day = day.subtract(const Duration(days: 1));
-      } else {
-        break;
-      }
-    }
-    return streak;
-  }
+  // Returns the current medication streak
+  int get medicationStreak => _currentStreak;
 
   // Returns a list of upcoming appointments (next 5, sorted by date)
   List<Appointment> get upcomingAppointments {
@@ -98,14 +133,16 @@ class HealthDataProvider extends ChangeNotifier {
   Future<void> incrementWaterIntake(DateTime date) async {
     final key = '${date.year}-${date.month}-${date.day}';
     _waterIntake[key] = (_waterIntake[key] ?? 0) + 1;
-    await _saveData();
+    await _saveWaterIntakeData();
+    await _saveHealthDataToFirestore();
     notifyListeners();
   }
   Future<void> decrementWaterIntake(DateTime date) async {
     final key = '${date.year}-${date.month}-${date.day}';
     if ((_waterIntake[key] ?? 0) > 0) {
       _waterIntake[key] = _waterIntake[key]! - 1;
-      await _saveData();
+      await _saveWaterIntakeData();
+      await _saveHealthDataToFirestore();
       notifyListeners();
     }
   }
@@ -118,7 +155,8 @@ class HealthDataProvider extends ChangeNotifier {
   Future<void> setBloodPressure(DateTime date, int systolic, int diastolic) async {
     final key = '${date.year}-${date.month}-${date.day}';
     _bloodPressure[key] = [systolic, diastolic];
-    await _saveData();
+    await _saveVitalData();
+    await _saveHealthDataToFirestore();
     notifyListeners();
   }
 
@@ -130,7 +168,8 @@ class HealthDataProvider extends ChangeNotifier {
   Future<void> setBloodSugar(DateTime date, int value) async {
     final key = '${date.year}-${date.month}-${date.day}';
     _bloodSugar[key] = value;
-    await _saveData();
+    await _saveVitalData();
+    await _saveHealthDataToFirestore();
     notifyListeners();
   }
 
@@ -142,7 +181,8 @@ class HealthDataProvider extends ChangeNotifier {
   Future<void> setPeakFlow(DateTime date, int value) async {
     final key = '${date.year}-${date.month}-${date.day}';
     _peakFlow[key] = value;
-    await _saveData();
+    await _saveVitalData();
+    await _saveHealthDataToFirestore();
     notifyListeners();
   }
 
@@ -210,6 +250,15 @@ class HealthDataProvider extends ChangeNotifier {
         _peakFlow = Map<String, int>.from(jsonDecode(peakFlowJson));
       }
       
+      // Load streak data
+      final streakDataJson = prefs.getString('streakData');
+      if (streakDataJson != null) {
+        final streakData = jsonDecode(streakDataJson);
+        _dailyMedicationCompletionStatus = Map<String, bool>.from(streakData['completionStatus'] ?? {});
+        _currentStreak = streakData['currentStreak'] ?? 0;
+        _longestStreak = streakData['longestStreak'] ?? 0;
+      }
+      
       // Do NOT load default data if empty; leave empty after onboarding/clear
       notifyListeners();
     } catch (e) {
@@ -245,24 +294,171 @@ class HealthDataProvider extends ChangeNotifier {
       
       // Save logs
       final logsJson = (_logs ?? [])
-          .map((log) => jsonEncode(log.toJson()))
+          .map((log) => jsonEncode(log.toJson(forFirestore: false)))
           .toList();
       await prefs.setStringList(_logsKey, logsJson);
       
       // Save appointments
       final appointmentsJson = (_appointments ?? [])
-          .map((appt) => jsonEncode(appt.toJson()))
+          .map((appt) => jsonEncode(appt.toJson(forFirestore: false)))
           .toList();
       await prefs.setStringList(_appointmentsKey, appointmentsJson);
 
-      // Save water intake
+      // Save water intake and vital data separately
+      await _saveWaterIntakeData();
+      await _saveVitalData();
+    } catch (e) {
+      _setError('Failed to save data: ${e.toString()}');
+    }
+  }
+
+  Future<void> _saveWaterIntakeData() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
       await prefs.setString('waterIntake', jsonEncode(_waterIntake));
+    } catch (e) {
+      _setError('Failed to save water intake data: ${e.toString()}');
+    }
+  }
+
+  Future<void> _saveVitalData() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
       await prefs.setString('bloodPressure', jsonEncode(_bloodPressure));
       await prefs.setString('bloodSugar', jsonEncode(_bloodSugar));
       await prefs.setString('peakFlow', jsonEncode(_peakFlow));
     } catch (e) {
-      _setError('Failed to save data: ${e.toString()}');
+      _setError('Failed to save vital data: ${e.toString()}');
     }
+  }
+
+  Future<void> _saveStreakData() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final streakData = {
+        'completionStatus': _dailyMedicationCompletionStatus,
+        'currentStreak': _currentStreak,
+        'longestStreak': _longestStreak,
+      };
+      await prefs.setString('streakData', jsonEncode(streakData));
+    } catch (e) {
+      _setError('Failed to save streak data: ${e.toString()}');
+    }
+  }
+
+  // Save health data to Firestore
+  Future<void> _saveHealthDataToFirestore() async {
+    final uid = _auth?.currentUser?.uid;
+    if (uid != null && _firestore != null) {
+      try {
+        final healthData = {
+          'waterIntake': _waterIntake,
+          'bloodPressure': _bloodPressure,
+          'bloodSugar': _bloodSugar,
+          'peakFlow': _peakFlow,
+          'streakData': {
+            'completionStatus': _dailyMedicationCompletionStatus,
+            'currentStreak': _currentStreak,
+            'longestStreak': _longestStreak,
+          },
+        };
+        await _firestore!.saveHealthData(uid, healthData);
+      } catch (e) {
+        _setError('Failed to save health data to Firestore: ${e.toString()}');
+      }
+    }
+  }
+
+  // Calculate and update medication streaks
+  Future<void> _updateMedicationStreaks() async {
+    if (_medications == null || _medications!.isEmpty || _logs == null) return;
+
+    // Build a map of date -> set of taken medication names
+    final Map<DateTime, Set<String>> takenPerDay = {};
+    for (final log in _logs!) {
+      if (log.type == 'medication' && log.description.startsWith('Took ')) {
+        final medName = log.description.substring(5);
+        final date = DateTime(log.date.year, log.date.month, log.date.day);
+        takenPerDay.putIfAbsent(date, () => {}).add(medName);
+      }
+    }
+
+    // Get all medication names
+    final allMedNames = _medications!.map((m) => m.name).toSet();
+    
+    // Update daily completion status
+    final today = DateTime.now();
+    for (int i = 0; i < 365; i++) { // Check last 365 days
+      final checkDate = DateTime(today.year, today.month, today.day).subtract(Duration(days: i));
+      final dateKey = '${checkDate.year}-${checkDate.month}-${checkDate.day}';
+      final takenMeds = takenPerDay[checkDate] ?? {};
+      
+      // Only mark as complete if all medications were taken
+      _dailyMedicationCompletionStatus[dateKey] = takenMeds.length == allMedNames.length && allMedNames.isNotEmpty;
+    }
+
+    // Calculate current streak (consecutive days from today backwards)
+    _currentStreak = 0;
+    DateTime checkDay = DateTime(today.year, today.month, today.day);
+    
+    while (true) {
+      final dateKey = '${checkDay.year}-${checkDay.month}-${checkDay.day}';
+      final isComplete = _dailyMedicationCompletionStatus[dateKey] ?? false;
+      
+      if (isComplete) {
+        _currentStreak++;
+        checkDay = checkDay.subtract(const Duration(days: 1));
+      } else {
+        break;
+      }
+    }
+
+    // Calculate longest streak
+    int tempStreak = 0;
+    int maxStreak = 0;
+    
+    // Sort dates and check for longest consecutive sequence
+    final sortedDates = _dailyMedicationCompletionStatus.keys.toList()
+      ..sort((a, b) {
+        final partsA = a.split('-');
+        final partsB = b.split('-');
+        final dateA = DateTime(int.parse(partsA[0]), int.parse(partsA[1]), int.parse(partsA[2]));
+        final dateB = DateTime(int.parse(partsB[0]), int.parse(partsB[1]), int.parse(partsB[2]));
+        return dateA.compareTo(dateB);
+      });
+
+    DateTime? previousDate;
+    for (final dateKey in sortedDates) {
+      final isComplete = _dailyMedicationCompletionStatus[dateKey] ?? false;
+      final parts = dateKey.split('-');
+      final currentDate = DateTime(int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]));
+      
+      if (isComplete) {
+        if (previousDate != null && currentDate.difference(previousDate).inDays == 1) {
+          tempStreak++;
+        } else {
+          tempStreak = 1;
+        }
+        maxStreak = maxStreak > tempStreak ? maxStreak : tempStreak;
+        previousDate = currentDate;
+      } else {
+        tempStreak = 0;
+        previousDate = null;
+      }
+    }
+    
+    _longestStreak = maxStreak > _longestStreak ? maxStreak : _longestStreak;
+    
+    // Save the updated streak data
+    await _saveStreakData();
+    await _saveHealthDataToFirestore();
+    notifyListeners();
+  }
+
+  // Method to check if all medications were taken for a specific date
+  bool isDayComplete(DateTime date) {
+    final dateKey = '${date.year}-${date.month}-${date.day}';
+    return _dailyMedicationCompletionStatus[dateKey] ?? false;
   }
 
   // Export/Import functionality
@@ -276,6 +472,11 @@ class HealthDataProvider extends ChangeNotifier {
         'bloodPressure': _bloodPressure,
         'bloodSugar': _bloodSugar,
         'peakFlow': _peakFlow,
+        'streakData': {
+          'completionStatus': _dailyMedicationCompletionStatus,
+          'currentStreak': _currentStreak,
+          'longestStreak': _longestStreak,
+        },
         'exportDate': DateTime.now().toIso8601String(),
         'version': '1.0.0',
       };
@@ -338,9 +539,18 @@ class HealthDataProvider extends ChangeNotifier {
       if (importData['peakFlow'] != null) {
         _peakFlow = Map<String, int>.from(importData['peakFlow'] as Map);
       }
+
+      // Import streak data
+      if (importData['streakData'] != null) {
+        final streakData = importData['streakData'];
+        _dailyMedicationCompletionStatus = Map<String, bool>.from(streakData['completionStatus'] ?? {});
+        _currentStreak = streakData['currentStreak'] ?? 0;
+        _longestStreak = streakData['longestStreak'] ?? 0;
+      }
       
       // Save imported data
       await _saveData();
+      await _saveStreakData();
       notifyListeners();
     } catch (e) {
       _setError('Failed to import data: ${e.toString()}');
@@ -492,6 +702,7 @@ class HealthDataProvider extends ChangeNotifier {
     _appointmentSubscription?.cancel();
     _logSubscription?.cancel();
     _profileSubscription?.cancel();
+    _healthDataSubscription?.cancel();
 
     if (auth.currentUser != null) {
       // Set lists to null to indicate loading state
@@ -504,6 +715,8 @@ class HealthDataProvider extends ChangeNotifier {
       // If user is logged in, listen to Firestore
       _medicationSubscription = _firestore?.medicationsStream(auth.currentUser!.uid).listen((meds) {
         _medications = meds.map((m) => Medication.fromJson(m)).toList();
+        // Update streaks whenever medications change
+        _updateMedicationStreaks();
         notifyListeners();
       }, onError: (e) {
         _setError('Failed to load medications: $e');
@@ -520,6 +733,8 @@ class HealthDataProvider extends ChangeNotifier {
       });
       _logSubscription = _firestore?.logsStream(auth.currentUser!.uid).listen((logs) {
         _logs = logs.map((l) => LogEntry.fromJson(l)).toList();
+        // Update streaks whenever logs change
+        _updateMedicationStreaks();
         notifyListeners();
       }, onError: (e) {
         _setError('Failed to load logs: $e');
@@ -528,11 +743,55 @@ class HealthDataProvider extends ChangeNotifier {
       });
       _profileSubscription = _firestore?.userProfileStream(auth.currentUser!.uid).listen((profile) {
         _userProfile = profile;
+        
+        // If profile doesn't exist, create a default one
+        if (profile == null && auth.currentUser != null) {
+          _createDefaultProfile(auth.currentUser!);
+        }
+        
         notifyListeners();
       }, onError: (e) {
         _setError('Failed to load profile: $e');
         _userProfile = null; // Can remain null on error
         notifyListeners();
+      });
+      
+      // Listen to health data changes
+      _healthDataSubscription = _firestore?.healthDataStream(auth.currentUser!.uid).listen((healthData) {
+        if (healthData != null) {
+          // Load water intake
+          if (healthData['waterIntake'] != null) {
+            _waterIntake = Map<String, int>.from(healthData['waterIntake']);
+          }
+          
+          // Load blood pressure
+          if (healthData['bloodPressure'] != null) {
+            _bloodPressure = (healthData['bloodPressure'] as Map<String, dynamic>)
+                .map((k, v) => MapEntry(k, List<int>.from(v)));
+          }
+          
+          // Load blood sugar
+          if (healthData['bloodSugar'] != null) {
+            _bloodSugar = Map<String, int>.from(healthData['bloodSugar']);
+          }
+          
+          // Load peak flow
+          if (healthData['peakFlow'] != null) {
+            _peakFlow = Map<String, int>.from(healthData['peakFlow']);
+          }
+          
+          // Load streak data
+          if (healthData['streakData'] != null) {
+            final streakData = healthData['streakData'];
+            _dailyMedicationCompletionStatus = Map<String, bool>.from(streakData['completionStatus'] ?? {});
+            _currentStreak = streakData['currentStreak'] ?? 0;
+            _longestStreak = streakData['longestStreak'] ?? 0;
+          }
+          
+          notifyListeners();
+        }
+      }, onError: (e) {
+        _setError('Failed to load health data: $e');
       });
     } else {
       // If user is logged out, clear all data
@@ -550,6 +809,7 @@ class HealthDataProvider extends ChangeNotifier {
     _appointmentSubscription?.cancel();
     _logSubscription?.cancel();
     _profileSubscription?.cancel();
+    _healthDataSubscription?.cancel();
     super.dispose();
   }
 
@@ -725,7 +985,11 @@ class HealthDataProvider extends ChangeNotifier {
       _bloodPressure.clear();
       _bloodSugar.clear();
       _peakFlow.clear(); // Clear peak flow data
+      _dailyMedicationCompletionStatus.clear(); // Clear streak data
+      _currentStreak = 0;
+      _longestStreak = 0;
       await _saveData();
+      await _saveStreakData();
       notifyListeners();
     } catch (e) {
       _setError('Failed to clear data: ${e.toString()}');
@@ -736,5 +1000,23 @@ class HealthDataProvider extends ChangeNotifier {
 
   Future<void> updateUserProfile(UserProfile profile) async {
     await _firestore?.setUserProfile(profile);
+  }
+
+  // Create a default profile for users who don't have one
+  Future<void> _createDefaultProfile(User user) async {
+    try {
+      // Try to get the name from onboarding data
+      final prefs = await SharedPreferences.getInstance();
+      final onboardingName = prefs.getString('user_name') ?? '';
+      
+      final defaultProfile = UserProfile(
+        uid: user.uid,
+        name: onboardingName.isNotEmpty ? onboardingName : (user.displayName ?? ''),
+        email: user.email ?? '',
+      );
+      await _firestore?.setUserProfile(defaultProfile);
+    } catch (e) {
+      _setError('Failed to create profile: $e');
+    }
   }
 } 

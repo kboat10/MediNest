@@ -7,6 +7,7 @@ import '../providers/user_preferences_provider.dart';
 import '../widgets/loading_widget.dart';
 import 'settings_screen.dart';
 import 'data_management_screen.dart';
+import '../services/shared_prefs_service.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({Key? key}) : super(key: key);
@@ -79,10 +80,7 @@ class ProfileScreen extends StatelessWidget {
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  onPressed: () async {
-                    await authService.signOut();
-                    Navigator.of(context).pushNamedAndRemoveUntil('/auth', (route) => false);
-                  },
+                  onPressed: () => _showSignOutDialog(context, authService, healthData, preferences),
                 ),
               ],
             ),
@@ -131,6 +129,74 @@ class ProfileScreen extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  void _showSignOutDialog(BuildContext context, AuthService authService, HealthDataProvider healthData, UserPreferencesProvider preferences) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Sign Out'),
+        content: const Text(
+          'Signing out will clear all your local data including medications, logs, appointments, and settings. '
+          'Your data will be safely stored in the cloud and restored when you sign back in.\n\n'
+          'Are you sure you want to continue?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              await _signOutAndClearData(context, authService, healthData, preferences);
+            },
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Sign Out'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _signOutAndClearData(BuildContext context, AuthService authService, HealthDataProvider healthData, UserPreferencesProvider preferences) async {
+    try {
+      // Show loading indicator
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const AlertDialog(
+          content: Row(
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(width: 16),
+              Text('Signing out...'),
+            ],
+          ),
+        ),
+      );
+
+      // Clear all local data (same as clear all data button)
+      await healthData.clearAllData();
+      await preferences.clearAllPreferences();
+      await SharedPrefsService.clearUserData();
+      
+      // Sign out from Firebase
+      await authService.signOut();
+      
+      // Navigate to onboarding screen (fresh start)
+      if (context.mounted) {
+        Navigator.of(context).pushNamedAndRemoveUntil('/onboarding', (route) => false);
+      }
+    } catch (e) {
+      // Close loading dialog
+      if (context.mounted) {
+        Navigator.of(context).pop();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Sign out failed: ${e.toString()}')),
+        );
+      }
+    }
   }
 }
 

@@ -18,9 +18,20 @@ class LogEntry {
   });
 
   factory LogEntry.fromJson(Map<String, dynamic> json) {
+    DateTime parsedDate;
+    
+    // Handle both Firestore Timestamp and regular DateTime string
+    if (json['date'] is Timestamp) {
+      parsedDate = (json['date'] as Timestamp).toDate();
+    } else if (json['date'] is String) {
+      parsedDate = DateTime.parse(json['date']);
+    } else {
+      parsedDate = DateTime.now(); // Fallback
+    }
+    
     return LogEntry(
       id: json['id'],
-      date: (json['date'] as Timestamp).toDate(),
+      date: parsedDate,
       description: json['description'],
       type: json['type'],
       feeling: json['feeling'],
@@ -28,9 +39,9 @@ class LogEntry {
     );
   }
 
-  Map<String, dynamic> toJson() {
+  Map<String, dynamic> toJson({bool forFirestore = false}) {
     return {
-      'date': Timestamp.fromDate(date),
+      'date': forFirestore ? Timestamp.fromDate(date) : date.toIso8601String(),
       'description': description,
       'type': type,
       'feeling': feeling,

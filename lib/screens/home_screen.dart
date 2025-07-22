@@ -69,34 +69,8 @@ class _HomeScreenState extends State<HomeScreen> {
                     ],
                   ),
                 ),
-                // Search bar
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
-                  child: TextField(
-                    decoration: InputDecoration(
-                      hintText: 'Search medical...',
-                      prefixIcon: Icon(Icons.search),
-                      contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 18),
-                // Services row
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      _ServiceIcon(icon: Icons.local_hospital, color: Colors.blue),
-                      _ServiceIcon(icon: Icons.medication, color: Colors.teal),
-                      _ServiceIcon(icon: Icons.calendar_today, color: Colors.orange),
-                      _ServiceIcon(icon: Icons.insert_chart, color: Colors.purple),
-                      _ServiceIcon(icon: Icons.settings, color: Colors.red),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 18),
-                // Replace the promotional card with a Health Tips card
+                const SizedBox(height: 24),
+                // Health Tips Card
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 24),
                   child: HealthTipsCard(),
@@ -142,7 +116,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           Expanded(
                             child: _DarkInfoCard(
                               title: '${healthData.medicationStreak} days',
-                              subtitle: 'Medication Streak',
+                              subtitle: 'Current Streak\n(Best: ${healthData.longestStreak})',
                               gradient: const LinearGradient(
                                 begin: Alignment.topLeft,
                                 end: Alignment.bottomRight,
@@ -195,68 +169,11 @@ class _HomeScreenState extends State<HomeScreen> {
                   onTap: () => _onItemTapped(2), // Navigate to Logs
                 ),
                 
-                DashboardCard(
-                  title: 'Medication Streak',
-                  value: '${healthData.medicationStreak} days',
-                  icon: Icons.emoji_events,
-                  color: Colors.purple,
-                ),
+
                 
                 const SizedBox(height: 20),
                 
-                // Quick Actions
-                Text(
-                  'Quick Actions',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Theme.of(context).textTheme.headlineSmall?.color,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                GestureDetector(
-                  onTap: () {
-                    Navigator.pushNamed(context, '/health_tips');
-                  },
-                  child: Card(
-                    elevation: 2,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(20),
-                      child: Row(
-                        children: [
-                          Icon(Icons.lightbulb, color: Theme.of(context).primaryColor, size: 32),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Health Tips',
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
-                                    color: Theme.of(context).primaryColor,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  'Get daily health tips, check drug info, and more.',
-                                  style: TextStyle(
-                                    color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.7),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const Icon(Icons.chevron_right),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
+
               ],
             ),
           );
@@ -306,23 +223,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-class _ServiceIcon extends StatelessWidget {
-  final IconData icon;
-  final Color color;
-  const _ServiceIcon({required this.icon, required this.color});
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 48,
-      height: 48,
-      decoration: BoxDecoration(
-        color: color.withAlpha(31),
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Icon(icon, color: color, size: 28),
-    );
-  }
-}
+
 class _DarkInfoCard extends StatelessWidget {
   final String title;
   final String subtitle;
@@ -331,30 +232,39 @@ class _DarkInfoCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 110,
+      constraints: const BoxConstraints(minHeight: 100),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(20),
         gradient: gradient,
       ),
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Text(
-            title,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              color: Colors.white,
-              fontWeight: FontWeight.bold,
-              fontSize: 18,
+          Flexible(
+            child: Text(
+              title,
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
             ),
           ),
-          const SizedBox(height: 10),
-          Text(
-            subtitle,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: Colors.white70,
-              fontSize: 15,
+          const SizedBox(height: 8),
+          Flexible(
+            child: Text(
+              subtitle,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: Colors.white70,
+                fontSize: 13,
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
             ),
           ),
         ],

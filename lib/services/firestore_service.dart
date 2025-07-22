@@ -40,12 +40,12 @@ class FirestoreService {
 
   // Add appointment
   Future<DocumentReference> addAppointment(Appointment appointment, String uid) async {
-    return await _db.collection('users').doc(uid).collection('appointments').add(appointment.toJson());
+    return await _db.collection('users').doc(uid).collection('appointments').add(appointment.toJson(forFirestore: true));
   }
 
   // Update appointment
   Future<void> updateAppointment(String docId, Appointment appointment, String uid) async {
-    await _db.collection('users').doc(uid).collection('appointments').doc(docId).set(appointment.toJson());
+    await _db.collection('users').doc(uid).collection('appointments').doc(docId).set(appointment.toJson(forFirestore: true));
   }
 
   // Delete appointment
@@ -68,12 +68,12 @@ class FirestoreService {
 
   // Add log
   Future<DocumentReference> addLog(LogEntry log, String uid) async {
-    return await _db.collection('users').doc(uid).collection('logs').add(log.toJson());
+    return await _db.collection('users').doc(uid).collection('logs').add(log.toJson(forFirestore: true));
   }
 
   // Update log
   Future<void> updateLog(String docId, LogEntry log, String uid) async {
-    await _db.collection('users').doc(uid).collection('logs').doc(docId).set(log.toJson());
+    await _db.collection('users').doc(uid).collection('logs').doc(docId).set(log.toJson(forFirestore: true));
   }
 
   // Delete log
@@ -104,6 +104,23 @@ class FirestoreService {
     return _db.collection('users').doc(uid).snapshots().map((doc) {
       if (doc.exists) {
         return UserProfile.fromFirestore(doc.data()!, uid);
+      }
+      return null;
+    });
+  }
+
+  // HEALTH DATA METHODS (Water Intake, Blood Pressure, etc.)
+
+  // Save health data (water intake, blood pressure, blood sugar, peak flow)
+  Future<void> saveHealthData(String uid, Map<String, dynamic> healthData) async {
+    await _db.collection('users').doc(uid).collection('healthData').doc('vitals').set(healthData, SetOptions(merge: true));
+  }
+
+  // Get health data stream
+  Stream<Map<String, dynamic>?> healthDataStream(String uid) {
+    return _db.collection('users').doc(uid).collection('healthData').doc('vitals').snapshots().map((doc) {
+      if (doc.exists) {
+        return doc.data();
       }
       return null;
     });

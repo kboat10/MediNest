@@ -11,6 +11,17 @@ final Map<String, String> drugFacts = {
   'Metformin': 'Metformin is used to treat type 2 diabetes and helps control blood sugar levels.',
   'Lisinopril': 'Lisinopril is used to treat high blood pressure and heart failure.',
   'Ventolin': 'Ventolin (salbutamol) is used to relieve symptoms of asthma and COPD.',
+  'Folic Acid': 'Folic acid is a B vitamin that helps prevent neural tube defects and supports red blood cell formation. Often prescribed during pregnancy or for certain types of anemia.',
+  'Ibuprofen': 'Ibuprofen is a nonsteroidal anti-inflammatory drug (NSAID) used to reduce pain, fever, and inflammation.',
+  'Omeprazole': 'Omeprazole is a proton pump inhibitor used to treat acid reflux, heartburn, and stomach ulcers.',
+  'Simvastatin': 'Simvastatin is used to lower cholesterol and reduce the risk of heart disease.',
+  'Warfarin': 'Warfarin is an anticoagulant (blood thinner) used to prevent blood clots.',
+  'Hydrocodone': 'Hydrocodone is an opioid pain medication used to treat moderate to severe pain.',
+  'Vitamin D': 'Vitamin D is essential for bone health and immune system function. Often prescribed for deficiency.',
+  'Prednisone': 'Prednisone is a corticosteroid used to treat inflammation and autoimmune conditions.',
+  'Insulin': 'Insulin is a hormone used to control blood sugar levels in people with diabetes.',
+  'Levothyroxine': 'Levothyroxine is used to treat hypothyroidism (underactive thyroid).',
+  'Zincovit': 'Zincovit is a multivitamin and mineral supplement containing zinc, vitamins A, B-complex, C, D, and E. It helps boost immunity, supports wound healing, and aids in overall nutritional health. Commonly used to treat vitamin and mineral deficiencies.',
   // Add more as needed
 };
 

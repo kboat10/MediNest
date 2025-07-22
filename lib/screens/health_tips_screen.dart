@@ -1,15 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart' as riverpod;
 import '../services/api_service.dart';
 import '../providers/user_preferences_provider.dart';
 import '../providers/health_data_provider.dart';
 import 'dart:math';
+import 'package:flutter/services.dart';
 
-final tipIndexProvider = riverpod.StateProvider<int>((ref) => DateTime.now().millisecondsSinceEpoch % 10000);
-final healthTipProvider = riverpod.FutureProvider.family<String, int>((ref, seed) async {
-  return await ApiService.getHealthTip(seed: seed);
-});
 
 class HealthTipsScreen extends StatefulWidget {
   const HealthTipsScreen({Key? key}) : super(key: key);
@@ -25,18 +21,60 @@ class _HealthTipsScreenState extends State<HealthTipsScreen> {
   bool _isLoadingReminders = true;
   bool _isLoadingNews = true;
   bool _isCheckingInteractions = false;
+  
+  // Daily tip state
+  String _dailyTip = '';
+  bool _isLoadingTip = false;
+  int _tipIndex = DateTime.now().millisecondsSinceEpoch % 10000;
 
   @override
   void initState() {
     super.initState();
     _loadData();
+    _loadDailyTip();
   }
 
   Future<void> _loadData() async {
     await Future.wait([
       _loadReminders(),
       _loadHealthNews(),
+      _loadDailyTip(),
     ]);
+  }
+
+  Future<void> _loadDailyTip() async {
+    setState(() {
+      _isLoadingTip = true;
+    });
+
+    try {
+      final tip = await ApiService.getHealthTip(seed: _tipIndex);
+      setState(() {
+        _dailyTip = tip;
+      });
+    } catch (e) {
+      setState(() {
+        _dailyTip = 'Stay hydrated and get enough sleep!';
+      });
+    } finally {
+      setState(() {
+        _isLoadingTip = false;
+      });
+    }
+  }
+
+  Future<void> _refreshTip() async {
+    final random = Random();
+    int newIndex;
+    do {
+      newIndex = random.nextInt(10000);
+    } while (newIndex == _tipIndex);
+    
+    setState(() {
+      _tipIndex = newIndex;
+    });
+    
+    await _loadDailyTip();
   }
 
   Future<void> _loadReminders() async {
@@ -172,25 +210,44 @@ class _HealthTipsScreenState extends State<HealthTipsScreen> {
     };
     final tips = (conditionTips[condition] ?? conditionTips['None']) ?? <String>[];
     final Map<String, List<String>> newsKeywords = {
-      'Sickle Cell Disease': ['sickle cell', 'anemia', 'blood disorder'],
-      'Hypertension': ['hypertension', 'blood pressure'],
-      'Diabetes': ['diabetes', 'blood sugar', 'insulin'],
-      'Asthma': ['asthma', 'respiratory'],
-      'Heart Disease': ['heart', 'cardiac'],
-      'Chronic Kidney Disease': ['kidney', 'renal'],
-      'COPD': ['copd', 'lung', 'respiratory'],
-      'Pregnancy': ['pregnancy', 'prenatal', 'maternal'],
-      'None': [],
+      'Sickle Cell Disease': ['sickle cell', 'anemia', 'blood disorder', 'hemoglobin', 'pain crisis', 'vaso-occlusive'],
+      'Hypertension': ['hypertension', 'blood pressure', 'cardiovascular', 'heart disease', 'stroke', 'bp'],
+      'Diabetes': ['diabetes', 'blood sugar', 'insulin', 'glucose', 'diabetic', 'type 1', 'type 2', 'glycemic'],
+      'Asthma': ['asthma', 'respiratory', 'breathing', 'inhaler', 'bronchial', 'allergy', 'wheeze'],
+      'Heart Disease': ['heart', 'cardiac', 'cardiovascular', 'coronary', 'artery', 'heart attack', 'chest pain'],
+      'Chronic Kidney Disease': ['kidney', 'renal', 'dialysis', 'nephrology', 'creatinine', 'kidney disease'],
+      'COPD': ['copd', 'lung', 'respiratory', 'breathing', 'chronic obstructive', 'emphysema', 'bronchitis'],
+      'Pregnancy': ['pregnancy', 'prenatal', 'maternal', 'pregnant', 'fetal', 'obstetric', 'birth'],
+      'None': ['health', 'medical', 'wellness', 'nutrition', 'exercise', 'prevention'],
     };
     // Filter news and reminders by keywords if possible
     List<Map<String, dynamic>> filteredNews = _healthNews;
     List<Map<String, dynamic>> filteredReminders = _reminders;
     final keywords = newsKeywords[condition] ?? [];
-    if (keywords.isNotEmpty) {
+    
+    if (keywords.isNotEmpty && _healthNews.isNotEmpty) {
+      // First try to find articles matching the user's condition
       filteredNews = _healthNews.where((item) {
         final title = (item['title'] ?? '').toString().toLowerCase();
-        return keywords.any((kw) => title.contains(kw));
+        final summary = (item['summary'] ?? '').toString().toLowerCase();
+        return keywords.any((kw) => title.contains(kw) || summary.contains(kw));
       }).toList();
+      
+      // If no condition-specific news found, show general health news
+      if (filteredNews.isEmpty) {
+        final generalKeywords = newsKeywords['None'] ?? [];
+        filteredNews = _healthNews.where((item) {
+          final title = (item['title'] ?? '').toString().toLowerCase();
+          final summary = (item['summary'] ?? '').toString().toLowerCase();
+          return generalKeywords.any((kw) => title.contains(kw) || summary.contains(kw));
+        }).toList();
+      }
+      
+      // If still no news, show all news
+      if (filteredNews.isEmpty) {
+        filteredNews = _healthNews;
+      }
+      
       filteredReminders = _reminders.where((item) {
         final text = (item['text'] ?? '').toString().toLowerCase();
         return keywords.any((kw) => text.contains(kw));
@@ -274,65 +331,50 @@ class _HealthTipsScreenState extends State<HealthTipsScreen> {
                               ),
                             ),
                           ),
-                  // Daily Health Tip (Riverpod)
+                  // Daily Health Tip
                   _buildSectionHeader(context, 'Daily Health Tip'),
-                  riverpod.Consumer(
-                    builder: (context, ref, _) {
-                      final tipIndex = ref.watch(tipIndexProvider);
-                      final tipAsync = ref.watch(healthTipProvider(tipIndex));
-                      return Card(
-                        margin: const EdgeInsets.only(bottom: 16),
-                        child: Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                  Card(
+                    margin: const EdgeInsets.only(bottom: 16),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
                             children: [
-                              Row(
-                                children: [
-                                  Icon(
-                                    Icons.lightbulb,
-                                    color: preferences.primaryColor,
-                                  ),
-                                  const SizedBox(width: 8),
-                                  const Text(
-                                    'Tip of the Day',
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 16,
-                                    ),
-                                  ),
-                                ],
+                              Icon(
+                                Icons.lightbulb,
+                                color: preferences.primaryColor,
                               ),
-                              const SizedBox(height: 12),
-                              tipAsync.when(
-                                data: (tip) => Text(
-                                  tip,
-                                  style: const TextStyle(fontSize: 16),
-                                ),
-                                loading: () => const Center(child: CircularProgressIndicator()),
-                                error: (e, _) => const Text('Stay hydrated and get enough sleep!'),
-                              ),
-                              const SizedBox(height: 12),
-                              Align(
-                                alignment: Alignment.centerRight,
-                                child: TextButton.icon(
-                                  onPressed: () {
-                                    final random = Random();
-                                    int newIndex;
-                                    do {
-                                      newIndex = random.nextInt(10000);
-                                    } while (newIndex == tipIndex);
-                                    ref.read(tipIndexProvider.notifier).state = newIndex;
-                                  },
-                                  icon: const Icon(Icons.refresh),
-                                  label: const Text('New Tip'),
+                              const SizedBox(width: 8),
+                              const Text(
+                                'Tip of the Day',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
                                 ),
                               ),
                             ],
                           ),
-                        ),
-                      );
-                    },
+                          const SizedBox(height: 12),
+                          _isLoadingTip
+                            ? const Center(child: CircularProgressIndicator())
+                            : Text(
+                                _dailyTip,
+                                style: const TextStyle(fontSize: 16),
+                              ),
+                          const SizedBox(height: 12),
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: TextButton.icon(
+                              onPressed: _refreshTip,
+                              icon: const Icon(Icons.refresh),
+                              label: const Text('New Tip'),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
 
                   // Medication Reminders
@@ -379,17 +421,35 @@ class _HealthTipsScreenState extends State<HealthTipsScreen> {
                   ),
 
                   // Health News
-                  _buildSectionHeader(context, 'Health News'),
+                  _buildSectionHeader(context, condition.isNotEmpty && condition != 'None' 
+                      ? 'Health News for $condition' 
+                      : 'General Health News'),
                   if (_isLoadingNews)
                     const Center(
                       child: CircularProgressIndicator(),
                     )
-                          else if (filteredNews.isEmpty)
+                  else if (filteredNews.isEmpty)
                     Card(
-                      child: const Padding(
-                        padding: EdgeInsets.all(16),
-                        child: Center(
-                                  child: Text('No health news available for your condition'),
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          children: [
+                            Icon(Icons.newspaper, size: 48, color: Colors.grey[400]),
+                            const SizedBox(height: 8),
+                            Text(
+                              condition.isNotEmpty && condition != 'None' 
+                                  ? 'No recent news found for $condition'
+                                  : 'No health news available at the moment',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(color: Colors.grey[600]),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Check back later for updates or browse general health tips above.',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(color: Colors.grey[500], fontSize: 12),
+                            ),
+                          ],
                         ),
                       ),
                     )
@@ -785,6 +845,77 @@ class _DrugLookupWidgetState extends State<_DrugLookupWidget> {
     }
   }
 
+  String _generateGoogleSearchUrl(String drugName) {
+    final encodedDrugName = Uri.encodeComponent(drugName.trim());
+    return 'https://www.google.com/search?q=$encodedDrugName+medication+information+uses+side+effects';
+  }
+
+  void _copySearchUrl(String drugName) {
+    final url = _generateGoogleSearchUrl(drugName);
+    Clipboard.setData(ClipboardData(text: url));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Google search link copied to clipboard!'),
+        action: SnackBarAction(
+          label: 'Open',
+          onPressed: () {
+            // Show the URL in a dialog for manual opening
+            _showUrlDialog(url);
+          },
+        ),
+      ),
+    );
+  }
+
+  void _showUrlDialog(String url) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Drug Information Search'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Copy this link and paste it in your browser for detailed drug information:'),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade100,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.grey.shade300),
+              ),
+              child: SelectableText(
+                url,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontFamily: 'monospace',
+                  color: Colors.blue.shade700,
+                ),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Clipboard.setData(ClipboardData(text: url));
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Link copied to clipboard!')),
+              );
+            },
+            child: const Text('Copy Link'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -798,18 +929,21 @@ class _DrugLookupWidgetState extends State<_DrugLookupWidget> {
                   hintText: 'Enter drug name (e.g., aspirin)',
                   border: OutlineInputBorder(),
                 ),
+                onChanged: (value) {
+                  setState(() {}); // Refresh to update button state
+                },
               ),
             ),
             const SizedBox(width: 8),
-            ElevatedButton(
-              onPressed: _isLoading ? null : _lookupDrug,
-              child: _isLoading
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Text('Lookup'),
+            ElevatedButton.icon(
+              onPressed: _drugController.text.trim().isEmpty 
+                  ? null 
+                  : () => _copySearchUrl(_drugController.text.trim()),
+              icon: const Icon(Icons.search, size: 18),
+              label: const Text('Search'),
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              ),
             ),
           ],
         ),
