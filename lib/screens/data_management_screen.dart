@@ -16,6 +16,7 @@ import 'package:flutter/services.dart'; // Added for SharedPreferences
 import '../services/auth_service.dart'; // Added for AuthService
 import '../models/user_profile.dart'; // Added for UserProfile
 import 'package:shared_preferences/shared_preferences.dart'; // Added for SharedPreferences
+import '../report_generator.dart';
 
 class DataManagementScreen extends StatefulWidget {
   const DataManagementScreen({super.key});
@@ -345,6 +346,38 @@ class _DataManagementScreenState extends State<DataManagementScreen> {
                         trailing: const Icon(Icons.chevron_right),
                         onTap: () async {
                           await _diagnoseFirestore();
+                        },
+                      ),
+                      const Divider(height: 1),
+                      ListTile(
+                        leading: Icon(
+                          Icons.description,
+                          color: preferences.primaryColor,
+                        ),
+                        title: const Text('Generate Project Report'),
+                        subtitle: const Text('Create PDF report for submission'),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () async {
+                          try {
+                            await ReportGenerator.generateProjectReport();
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Project report generated successfully!'),
+                                  backgroundColor: Colors.green,
+                                ),
+                              );
+                            }
+                          } catch (e) {
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Error generating report: $e'),
+                                  backgroundColor: Colors.red,
+                                ),
+                              );
+                            }
+                          }
                         },
                       ),
                       const Divider(height: 1),

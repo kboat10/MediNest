@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MediNest - Mobile Health Management App</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 40px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            border-radius: 8px;
+        }
+        .header {
+            text-align: center;
+            border-bottom: 3px solid #2196F3;
+            padding-bottom: 20px;
+            margin-bottom: 30px;
+        }
+        .header h1 {
+            color: #2196F3;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+        .header h2 {
+            color: #666;
+            font-size: 1.2em;
+            margin-bottom: 5px;
+        }
+        .header h3 {
+            color: #333;
+            font-size: 1em;
+            margin-bottom: 20px;
+        }
+        .student-info {
+            background-color: #f8f9fa;
+            padding: 20px;
+            border-radius: 5px;
+            margin-bottom: 30px;
+        }
+        .student-info h4 {
+            color: #2196F3;
+            margin-top: 0;
+        }
+        .section {
+            margin-bottom: 40px;
+        }
+        .section h2 {
+            color: #2196F3;
+            border-bottom: 2px solid #2196F3;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+        .section h3 {
+            color: #333;
+            margin-top: 25px;
+            margin-bottom: 15px;
+        }
+        ul {
+            padding-left: 20px;
+        }
+        li {
+            margin-bottom: 8px;
+        }
+        .feature-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-top: 20px;
+        }
+        .feature-category {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            border-left: 4px solid #2196F3;
+        }
+        .feature-category h4 {
+            color: #2196F3;
+            margin-top: 0;
+            margin-bottom: 10px;
+        }
+        .widget-tree {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            margin-top: 15px;
+        }
+        .lessons-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-top: 20px;
+        }
+        .lesson-category {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+        }
+        .lesson-category h4 {
+            color: #2196F3;
+            margin-top: 0;
+            margin-bottom: 10px;
+        }
+        .github-link {
+            text-align: center;
+            margin-top: 30px;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 5px;
+        }
+        .github-link a {
+            color: #2196F3;
+            text-decoration: none;
+            font-weight: bold;
+        }
+        .github-link a:hover {
+            text-decoration: underline;
+        }
+        @media print {
+            body {
+                background-color: white;
+            }
+            .container {
+                box-shadow: none;
+                max-width: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>MediNest - Mobile Health Management App</h1>
+            <h2>Flutter Mobile Application Development Project</h2>
+            <h3>Semester Examination – Mini Project</h3>
+            <p><strong>Deadline: 22nd July, 2025</strong></p>
+        </div>
+
+        <div class="student-info">
+            <h4>Student Information:</h4>
+            <p><strong>Name:</strong> Nana Kwaku Afriyie Ampadu-Boateng</p>
+            <p><strong>Course:</strong> Computer Science</p>
+            <p><strong>Email:</strong> kwabaoat048@gmail.com</p>
+            <p><strong>Phone:</strong> +233551127363</p>
+        </div>
+
+        <div class="section">
+            <h2>1. App Description</h2>
+            <p>MediNest is a comprehensive mobile health management application designed to help users manage their medications, track health routines, and stay on top of medical appointments. The app addresses critical healthcare challenges by providing a personalized, user-friendly platform for medication adherence and health monitoring.</p>
+            
+            <h3>Key Objectives:</h3>
+            <ul>
+                <li>Improve medication adherence through reminders and tracking</li>
+                <li>Provide condition-specific health monitoring (hypertension, diabetes, asthma, sickle cell)</li>
+                <li>Enable comprehensive health logging and symptom tracking</li>
+                <li>Facilitate appointment management with notifications</li>
+                <li>Offer health education through daily tips and condition-specific information</li>
+            </ul>
+
+            <h3>Target Users:</h3>
+            <ul>
+                <li>Patients with chronic conditions requiring medication management</li>
+                <li>Individuals seeking to improve their health tracking habits</li>
+                <li>Healthcare providers who want to monitor patient adherence</li>
+                <li>Caregivers managing medication schedules for dependents</li>
+            </ul>
+
+            <h3>Technology Stack:</h3>
+            <ul>
+                <li><strong>Frontend:</strong> Flutter & Dart</li>
+                <li><strong>Backend:</strong> Firebase (Authentication, Firestore)</li>
+                <li><strong>Local Storage:</strong> SharedPreferences</li>
+                <li><strong>State Management:</strong> Provider Pattern</li>
+                <li><strong>Notifications:</strong> Flutter Local Notifications</li>
+                <li><strong>PDF Generation:</strong> pdf & printing packages</li>
+            </ul>
+        </div>
+
+        <div class="section">
+            <h2>2. Feature List</h2>
+            <div class="feature-grid">
+                <div class="feature-category">
+                    <h4>Authentication & User Management</h4>
+                    <ul>
+                        <li>Firebase Authentication (sign up, sign in, sign out)</li>
+                        <li>User profile management with health condition selection</li>
+                        <li>Onboarding flow for new users</li>
+                        <li>Secure data access and user session management</li>
+                    </ul>
+                </div>
+
+                <div class="feature-category">
+                    <h4>Medication Management</h4>
+                    <ul>
+                        <li>Add, edit, delete medications with dosage information</li>
+                        <li>Set medication schedules and reminder times</li>
+                        <li>Daily medication adherence tracking (taken/missed)</li>
+                        <li>Medication streak tracking (current and longest streaks)</li>
+                        <li>Medication history and analytics</li>
+                    </ul>
+                </div>
+
+                <div class="feature-category">
+                    <h4>Health Tracking & Monitoring</h4>
+                    <ul>
+                        <li>Condition-specific vitals tracking (BP, blood sugar, peak flow)</li>
+                        <li>Pain level monitoring with visual slider</li>
+                        <li>Water intake tracking with hydration reminders</li>
+                        <li>Daily feelings and symptoms logging</li>
+                        <li>Comprehensive health summary dashboard</li>
+                    </ul>
+                </div>
+
+                <div class="feature-category">
+                    <h4>Appointment Management</h4>
+                    <ul>
+                        <li>Add, edit, delete medical appointments</li>
+                        <li>Appointment notifications (1 hour before)</li>
+                        <li>View past and upcoming appointments</li>
+                        <li>Appointment details with location and notes</li>
+                    </ul>
+                </div>
+
+                <div class="feature-category">
+                    <h4>Notifications & Reminders</h4>
+                    <ul>
+                        <li>Local notifications for medication reminders</li>
+                        <li>Appointment notifications</li>
+                        <li>Notification permissions handling</li>
+                        <li>Test notification functionality</li>
+                        <li>Toggle notifications on/off</li>
+                    </ul>
+                </div>
+
+                <div class="feature-category">
+                    <h4>Data Management & Export</h4>
+                    <ul>
+                        <li>PDF export of comprehensive health data</li>
+                        <li>Local data backup and restore</li>
+                        <li>Cloud sync functionality (Firebase)</li>
+                        <li>Data management with diagnostics</li>
+                        <li>Offline-first functionality</li>
+                    </ul>
+                </div>
+
+                <div class="feature-category">
+                    <h4>User Interface & Experience</h4>
+                    <ul>
+                        <li>Dark mode support with theme switching</li>
+                        <li>Responsive design with proper navigation</li>
+                        <li>Loading states and error handling</li>
+                        <li>User-friendly forms and validation</li>
+                        <li>Health tips and educational content</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>3. Screenshots</h2>
+            <p>The app contains 10 comprehensive screens:</p>
+            <ol>
+                <li><strong>Auth Screen</strong> - Login/Signup interface</li>
+                <li><strong>Onboarding Screen</strong> - User setup and medication configuration</li>
+                <li><strong>Home Screen</strong> - Dashboard with health summary</li>
+                <li><strong>Schedule Screen</strong> - Medication management and scheduling</li>
+                <li><strong>Logs Screen</strong> - Daily health tracking and vitals monitoring</li>
+                <li><strong>Appointments Screen</strong> - Medical appointment management</li>
+                <li><strong>Health Tips Screen</strong> - Health education and daily tips</li>
+                <li><strong>Profile Screen</strong> - User profile and settings</li>
+                <li><strong>Settings Screen</strong> - App configuration and preferences</li>
+                <li><strong>Data Management Screen</strong> - Backup, restore, and export</li>
+            </ol>
+            <p><em>Note: Screenshots would be included here showing the actual app interface, navigation flow, and key features in action.</em></p>
+        </div>
+
+        <div class="section">
+            <h2>4. Widget Tree Diagram for Each Screen</h2>
+            
+            <h3>Home Screen Widget Tree:</h3>
+            <div class="widget-tree">
+Scaffold
+  ├── AppBar
+  ├── Consumer&lt;HealthDataProvider&gt;
+  │   └── Column
+  │       ├── Dashboard Cards (Grid)
+  │       │   ├── Medication Card
+  │       │   ├── Streak Card
+  │       │   ├── Appointments Card
+  │       │   └── Health Tips Card
+  │       └── Quick Actions
+  └── BottomNavigationBar
+            </div>
+
+            <h3>Logs Screen Widget Tree:</h3>
+            <div class="widget-tree">
+Scaffold
+  ├── AppBar
+  ├── Consumer2&lt;HealthDataProvider, UserPreferencesProvider&gt;
+  │   └── Column
+  │       ├── Date Selector
+  │       ├── Health Input Forms
+  │       │   ├── Feelings & Symptoms
+  │       │   ├── Condition-specific Vitals
+  │       │   └── Pain Level Slider
+  │       ├── Medication Checklist
+  │       └── Daily Summary
+            </div>
+
+            <h3>Schedule Screen Widget Tree:</h3>
+            <div class="widget-tree">
+Scaffold
+  ├── AppBar
+  ├── Consumer&lt;HealthDataProvider&gt;
+  │   └── Column
+  │       ├── Add Medication Button
+  │       └── ListView.builder
+  │           └── Medication Cards
+  │               ├── Medication Info
+  │               ├── Schedule Details
+  │               └── Action Buttons
+            </div>
+
+            <h3>Appointments Screen Widget Tree:</h3>
+            <div class="widget-tree">
+Scaffold
+  ├── AppBar
+  ├── Consumer&lt;HealthDataProvider&gt;
+  │   └── Column
+  │       ├── Add Appointment Button
+  │       ├── TabBar (Upcoming/Past)
+  │       └── TabBarView
+  │           └── ListView.builder
+  │               └── Appointment Cards
+  │                   ├── Appointment Details
+  │                   └── Action Buttons
+            </div>
+
+            <h3>Auth Screen (Sign Up/Sign In) Widget Tree:</h3>
+            <div class="widget-tree">
+Scaffold
+  ├── AppBar
+  ├── SingleChildScrollView
+  │   └── Padding
+  │       └── Column
+  │           ├── Logo/Title Section
+  │           ├── TabBar (Sign In/Sign Up)
+  │           ├── TabBarView
+  │           │   ├── Sign In Form
+  │           │   │   ├── Email TextField
+  │           │   │   ├── Password TextField
+  │           │   │   ├── Forgot Password Link
+  │           │   │   └── Sign In Button
+  │           │   └── Sign Up Form
+  │           │       ├── Name TextField
+  │           │       ├── Email TextField
+  │           │       ├── Password TextField
+  │           │       └── Sign Up Button
+  │           └── Social Login Options
+            </div>
+
+            <h3>Onboarding Screen Widget Tree:</h3>
+            <div class="widget-tree">
+Scaffold
+  ├── AppBar
+  ├── PageView.builder
+  │   └── Onboarding Pages
+  │       ├── Welcome Page
+  │       │   ├── Welcome Text
+  │       │   ├── App Description
+  │       │   └── Next Button
+  │       ├── User Info Page
+  │       │   ├── Name Input
+  │       │   ├── Age Input
+  │       │   ├── Health Condition Selection
+  │       │   └── Next Button
+  │       ├── Medication Setup Page
+  │       │   ├── Add Medication Form
+  │       │   ├── Medication List
+  │       │   └── Get Started Button
+  │       └── Completion Page
+  │           ├── Success Message
+  │           └── Finish Button
+  └── PageIndicator
+            </div>
+
+            <h3>Profile Screen Widget Tree:</h3>
+            <div class="widget-tree">
+Scaffold
+  ├── AppBar
+  ├── SingleChildScrollView
+  │   └── Column
+  │       ├── Profile Header
+  │       │   ├── Avatar
+  │       │   ├── User Name
+  │       │   └── Edit Profile Button
+  │       ├── Profile Information
+  │       │   ├── Personal Details
+  │       │   ├── Health Condition
+  │       │   └── Account Settings
+  │       ├── App Settings
+  │       │   ├── Theme Toggle
+  │       │   ├── Notification Settings
+  │       │   └── Privacy Settings
+  │       └── Action Buttons
+  │           ├── Export Data
+  │           ├── Backup Data
+  │           └── Sign Out Button
+            </div>
+
+            <h3>Health Tips Screen Widget Tree:</h3>
+            <div class="widget-tree">
+Scaffold
+  ├── AppBar
+  ├── Column
+  │   ├── Search Bar
+  │   ├── Category Filter
+  │   └── Expanded
+  │       └── ListView.builder
+  │           └── Health Tip Cards
+  │               ├── Tip Title
+  │               ├── Tip Description
+  │               ├── Category Badge
+  │               ├── Read More Button
+  │               └── Bookmark Button
+            </div>
+
+            <h3>Data Management Screen Widget Tree:</h3>
+            <div class="widget-tree">
+Scaffold
+  ├── AppBar
+  ├── SingleChildScrollView
+  │   └── Column
+  │       ├── Data Overview Section
+  │       │   └── Statistics Cards
+  │       │       ├── Medication Count
+  │       │       ├── Logs Count
+  │       │       └── Appointments Count
+  │       ├── Backup & Restore Section
+  │       │   ├── Create Backup Button
+  │       │   ├── Restore from Backup Button
+  │       │   └── Backup List
+  │       ├── Cloud Sync Section
+  │       │   ├── Sync to Cloud Button
+  │       │   ├── Restore from Cloud Button
+  │       │   └── Sync Status
+  │       ├── Export Section
+  │       │   ├── Export to PDF Button
+  │       │   └── Export Options
+  │       ├── Debug Tools Section
+  │       │   ├── Debug Data State
+  │       │   ├── Diagnose Firestore
+  │       │   └── Generate Project Report
+  │       └── Data Actions Section
+  │           ├── Refresh Data
+  │           └── Clear All Data
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>5. Lessons Learned</h2>
+            <p>Throughout this project, I faced numerous challenges that taught me valuable lessons about mobile app development, problem-solving, and persistence. Here's my journey and the key lessons I learned:</p>
+
+            <div class="lessons-grid">
+                <div class="lesson-category">
+                    <h4>Firebase Integration Challenges</h4>
+                    <ul>
+                        <li><strong>Initial Setup Issues:</strong> I struggled with Firebase configuration and getting authentication to work properly. The Firebase console setup was confusing at first, but I learned to follow the documentation step-by-step.</li>
+                        <li><strong>Firestore Connectivity Problems:</strong> The biggest challenge was when Firestore operations started hanging and timing out. I spent days debugging this issue, trying different approaches before implementing a hybrid solution.</li>
+                        <li><strong>Solution:</strong> I learned to implement offline-first functionality using SharedPreferences as a fallback when Firestore is unavailable. This taught me the importance of having backup systems and graceful degradation.</li>
+                        <li><strong>Authentication Persistence:</strong> Users were being logged out unexpectedly. I fixed this by properly managing authentication state and implementing proper session handling.</li>
+                    </ul>
+                </div>
+
+                <div class="lesson-category">
+                    <h4>Data Management & State Issues</h4>
+                    <ul>
+                        <li><strong>State Management Complexity:</strong> Managing state across multiple screens was initially overwhelming. I learned to use Provider pattern effectively and organize my data providers properly.</li>
+                        <li><strong>Data Persistence Problems:</strong> User data wasn't persisting between app sessions. I implemented comprehensive SharedPreferences save/load methods and learned about data serialization.</li>
+                        <li><strong>Navigation State Issues:</strong> The app was taking users to onboarding even when they hadn't signed out. I debugged the AuthWrapper logic and fixed the sign-out detection.</li>
+                        <li><strong>Solution:</strong> I created a robust data management system with proper error handling, loading states, and fallback mechanisms.</li>
+                    </ul>
+                </div>
+
+                <div class="lesson-category">
+                    <h4>UI/UX Development Challenges</h4>
+                    <ul>
+                        <li><strong>Widget Tree Complexity:</strong> Building complex UI layouts with proper widget trees was challenging. I learned to break down complex screens into smaller, manageable components.</li>
+                        <li><strong>Responsive Design Issues:</strong> The app looked different on various screen sizes. I implemented proper responsive design using MediaQuery and flexible layouts.</li>
+                        <li><strong>Loading States:</strong> Users were seeing blank screens during data loading. I added proper loading indicators and error states throughout the app.</li>
+                        <li><strong>Navigation Flow:</strong> The bottom navigation and screen transitions needed refinement. I learned about proper navigation patterns and user flow design.</li>
+                    </ul>
+                </div>
+
+                <div class="lesson-category">
+                    <h4>Feature Implementation Challenges</h4>
+                    <ul>
+                        <li><strong>Medication Tracking Logic:</strong> Implementing medication adherence tracking with proper time-based logic was complex. I had to handle edge cases like timezone changes and missed doses.</li>
+                        <li><strong>Notification System:</strong> Setting up local notifications for medication reminders required understanding platform-specific implementations and permission handling.</li>
+                        <li><strong>PDF Generation:</strong> Creating comprehensive PDF reports with proper formatting was initially overwhelming. I learned to use the pdf package effectively and structure data properly.</li>
+                        <li><strong>Health Data Validation:</strong> Implementing proper validation for health data inputs (blood pressure, blood sugar, etc.) required understanding medical data ranges and user input patterns.</li>
+                    </ul>
+                </div>
+            </div>
+
+            <h3>Specific Technical Problems I Solved</h3>
+            <ul>
+                <li><strong>Onboarding Navigation Bug:</strong> Users were stuck on onboarding screen after signup. I fixed the AuthWrapper logic by properly managing onboarding completion flags and user state transitions.</li>
+                <li><strong>Medication Status Not Updating:</strong> The UI wasn't reflecting medication status changes. I wrapped the medication checklist in a Consumer widget and ensured proper notifyListeners() calls.</li>
+                <li><strong>Data Clearing on Sign Out:</strong> Previous user data was persisting after sign out. I implemented comprehensive data clearing in the AuthService and HealthDataProvider.</li>
+                <li><strong>Condition-Specific Vitals Not Logging:</strong> Patient feelings and vitals weren't being saved. I added debug logging and fixed the data saving methods in the HealthDataProvider.</li>
+                <li><strong>PDF Export Issues:</strong> The PDF wasn't including all health data. I enhanced the export functionality to include comprehensive data from all sources.</li>
+            </ul>
+
+            <h3>Personal Growth & Learning</h3>
+            <ul>
+                <li><strong>Problem-Solving Skills:</strong> I learned to systematically debug complex issues by adding logging, testing hypotheses, and implementing incremental fixes.</li>
+                <li><strong>Persistence:</strong> When Firebase issues seemed insurmountable, I didn't give up. Instead, I found alternative solutions and implemented a robust fallback system.</li>
+                <li><strong>Documentation Importance:</strong> I realized how crucial proper documentation is when I had to revisit code I wrote weeks earlier. I learned to write clear comments and maintain good code organization.</li>
+                <li><strong>User-Centric Thinking:</strong> I learned to think from the user's perspective, especially when implementing error handling and loading states.</li>
+                <li><strong>Version Control Best Practices:</strong> I learned the importance of regular commits and proper Git workflow, especially when debugging complex issues.</li>
+            </ul>
+
+            <h3>What I Would Do Differently</h3>
+            <ul>
+                <li><strong>Start with Local Storage:</strong> I would have implemented local storage first, then added cloud sync later, rather than trying to do both simultaneously.</li>
+                <li><strong>More Testing:</strong> I would have implemented more comprehensive testing from the beginning to catch issues earlier.</li>
+                <li><strong>Better Error Handling:</strong> I would have implemented error boundaries and better error recovery mechanisms from the start.</li>
+                <li><strong>Documentation First:</strong> I would have documented my API and data structures before implementing features.</li>
+            </ul>
+
+            <h3>Future Improvements</h3>
+            <ul>
+                <li><strong>Advanced Analytics:</strong> Implement more sophisticated health analytics and insights</li>
+                <li><strong>Integration:</strong> Connect with healthcare providers and electronic health records</li>
+                <li><strong>AI Features:</strong> Add machine learning for personalized health recommendations</li>
+                <li><strong>Multi-platform:</strong> Extend to iOS and web platforms for broader accessibility</li>
+                <li><strong>Real-time Sync:</strong> Implement real-time data synchronization when Firestore connectivity improves</li>
+            </ul>
+        </div>
+
+        <div class="github-link">
+            <h4>GitHub Repository</h4>
+            <a href="https://github.com/kboat10/MediNest.git" target="_blank">https://github.com/kboat10/MediNest.git</a>
+        </div>
+    </div>
+</body>
+</html> 
