@@ -46,4 +46,21 @@ class Appointment {
       'notes': notes,
     };
   }
+
+  // Add copyWith method
+  Appointment copyWith({
+    String? id,
+    String? title,
+    DateTime? dateTime,
+    String? location,
+    String? notes,
+  }) {
+    return Appointment(
+      id: id ?? this.id,
+      title: title ?? this.title,
+      dateTime: dateTime ?? this.dateTime,
+      location: location ?? this.location,
+      notes: notes ?? this.notes,
+    );
+  }
 } 

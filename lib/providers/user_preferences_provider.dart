@@ -27,6 +27,10 @@ class UserPreferencesProvider extends ChangeNotifier {
     'Diabetes',
     'Asthma',
     'Heart Disease',
+    'Chronic Kidney Disease',
+    'COPD',
+    'Pregnancy',
+    'Other',
     'None',
   ];
   

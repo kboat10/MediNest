@@ -7,7 +7,7 @@ import '../services/notification_service.dart';
 import '../widgets/loading_widget.dart';
 
 class AppointmentsScreen extends StatefulWidget {
-  const AppointmentsScreen({Key? key}) : super(key: key);
+  const AppointmentsScreen({super.key});
 
   @override
   State<AppointmentsScreen> createState() => _AppointmentsScreenState();
@@ -29,15 +29,16 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
   Widget build(BuildContext context) {
     return Consumer<HealthDataProvider>(
       builder: (context, healthData, child) {
+        // Use the safe getter that returns an empty list if null
+        final appointments = healthData.appointments;
+        
         Widget body;
-        if (healthData.appointments == null) {
-          body = const LoadingWidget(message: 'Loading appointments...');
-        } else if (healthData.errorMessage != null && healthData.appointments!.isEmpty) {
+        if (healthData.errorMessage != null && appointments.isEmpty) {
           body = _buildErrorWidget(context, healthData.errorMessage!, healthData.clearError);
-        } else if (healthData.appointments!.isEmpty) {
+        } else if (appointments.isEmpty) {
           body = _buildEmptyState();
         } else {
-          body = _buildAppointmentsList(context, healthData, healthData.appointments!);
+          body = _buildAppointmentsList(context, healthData, appointments);
         }
 
         return Scaffold(
@@ -48,8 +49,8 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
           body: body,
           floatingActionButton: FloatingActionButton(
             onPressed: () => _showAddAppointmentDialog(context, healthData),
-            child: const Icon(Icons.add),
             tooltip: 'Add Appointment',
+            child: const Icon(Icons.add),
           ),
         );
       },
@@ -87,7 +88,7 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
             itemBuilder: (context, index) {
               final appt = appointments[index];
               return Dismissible(
-                key: Key(appt.id!),
+                key: Key(appt.id ?? '${appt.title}_${appt.dateTime.millisecondsSinceEpoch}'),
                 background: Container(
                   margin: const EdgeInsets.only(bottom: 8),
                   decoration: BoxDecoration(
@@ -135,7 +136,9 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
                   _deletedIndex = index;
                   
                   await NotificationService().flutterLocalNotificationsPlugin.cancel(appt.title.hashCode ^ appt.dateTime.hashCode);
-                  await healthData.deleteAppointment(appt.id!);
+                  if (appt.id != null) {
+                    await healthData.deleteAppointment(appt.id!);
+                  }
                   
                   if (mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
@@ -262,7 +265,9 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
                               location: result.location,
                               notes: result.notes,
                             );
-                            await healthData.editAppointment(appt.id!, updatedAppointment);
+                            if (appt.id != null) {
+                              await healthData.editAppointment(appt.id!, updatedAppointment);
+                            }
                             final newNotifTime = result.dateTime.subtract(const Duration(hours: 1));
                             if (newNotifTime.isAfter(DateTime.now())) {
                               await NotificationService().scheduleNotification(
@@ -299,7 +304,9 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
                           
                           if (confirmed == true) {
                             await NotificationService().flutterLocalNotificationsPlugin.cancel(appt.title.hashCode ^ appt.dateTime.hashCode);
-                            await healthData.deleteAppointment(appt.id!);
+                            if (appt.id != null) {
+                              await healthData.deleteAppointment(appt.id!);
+                            }
                           }
                         }
                       },
@@ -404,7 +411,7 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
 }
 
 class AddAppointmentDialog extends StatefulWidget {
-  const AddAppointmentDialog({Key? key}) : super(key: key);
+  const AddAppointmentDialog({super.key});
 
   @override
   State<AddAppointmentDialog> createState() => _AddAppointmentDialogState();
@@ -511,7 +518,7 @@ class _AddAppointmentDialogState extends State<AddAppointmentDialog> {
 class EditAppointmentDialog extends StatefulWidget {
   final Appointment appointment;
   
-  const EditAppointmentDialog({Key? key, required this.appointment}) : super(key: key);
+  const EditAppointmentDialog({super.key, required this.appointment});
 
   @override
   State<EditAppointmentDialog> createState() => _EditAppointmentDialogState();

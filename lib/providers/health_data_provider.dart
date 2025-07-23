@@ -21,6 +21,7 @@ class HealthDataProvider extends ChangeNotifier {
   Map<String, List<int>> _bloodPressure = {};
   Map<String, int> _bloodSugar = {};
   Map<String, int> _peakFlow = {};
+  Map<String, int> _painLevel = {}; // Add pain level tracking
   UserProfile? _userProfile;
   StreamSubscription? _profileSubscription;
   
@@ -41,6 +42,96 @@ class HealthDataProvider extends ChangeNotifier {
   static const String _medicationsKey = 'medications';
   static const String _logsKey = 'logs';
   static const String _appointmentsKey = 'appointments';
+  
+  // Constructor - initialize with local data immediately
+  HealthDataProvider() {
+    print('HealthDataProvider - Constructor called, initializing...');
+    _initializeWithLocalData();
+  }
+
+  // Method to initialize services (called from screens that need them)
+  void initializeServices(AuthService auth, FirestoreService firestore) {
+    print('HealthDataProvider - initializeServices called');
+    _auth = auth;
+    _firestore = firestore;
+    
+    // Ensure loading state is false initially
+    _setLoading(false);
+    
+    // DISABLED: Firestore connections to avoid errors
+    // If user is authenticated, we'll use SharedPreferences only
+    if (auth.currentUser != null) {
+      print('HealthDataProvider - User authenticated, using SharedPreferences only');
+      // Load any existing data from SharedPreferences
+      loadAllDataFromSharedPreferences().then((_) {
+        print('HealthDataProvider - ✅ Data loaded from SharedPreferences');
+        notifyListeners();
+      });
+    }
+  }
+
+  // Initialize with local data immediately on startup
+  Future<void> _initializeWithLocalData() async {
+    try {
+      print('HealthDataProvider - Loading initial data from SharedPreferences...');
+      await loadAllDataFromSharedPreferences();
+      
+      // Ensure we have at least empty lists
+      _medications ??= [];
+      _appointments ??= [];
+      _logs ??= [];
+      
+      print('HealthDataProvider - ✅ Initialized with local data');
+      print('HealthDataProvider - Medications: ${_medications!.length}');
+      print('HealthDataProvider - Appointments: ${_appointments!.length}');
+      print('HealthDataProvider - Logs: ${_logs!.length}');
+      
+      // Ensure loading state is false after initialization
+      _setLoading(false);
+      notifyListeners();
+    } catch (e) {
+      print('HealthDataProvider - Error in initial local data load: $e');
+      // Set default empty state
+      _medications = [];
+      _appointments = [];
+      _logs = [];
+      
+      // Ensure loading state is false even on error
+      _setLoading(false);
+      notifyListeners();
+    }
+  }
+
+  // Method to check if data exists in SharedPreferences
+  Future<bool> hasDataInSharedPreferences() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final hasMedications = prefs.getString(_medicationsKey) != null;
+      final hasAppointments = prefs.getString(_appointmentsKey) != null;
+      final hasLogs = prefs.getString(_logsKey) != null;
+      
+      print('HealthDataProvider - Data check: medications=$hasMedications, appointments=$hasAppointments, logs=$hasLogs');
+      
+      // Debug: Print actual data if it exists
+      if (hasMedications) {
+        final medicationsJson = prefs.getString(_medicationsKey);
+        print('HealthDataProvider - Medications JSON: $medicationsJson');
+      }
+      if (hasAppointments) {
+        final appointmentsJson = prefs.getString(_appointmentsKey);
+        print('HealthDataProvider - Appointments JSON: $appointmentsJson');
+      }
+      if (hasLogs) {
+        final logsJson = prefs.getString(_logsKey);
+        print('HealthDataProvider - Logs JSON: $logsJson');
+      }
+      
+      return hasMedications || hasAppointments || hasLogs;
+    } catch (e) {
+      print('HealthDataProvider - Error checking data existence: $e');
+      return false;
+    }
+  }
   
   // Getters are here...
   bool get isLoading => _isLoading;
@@ -130,11 +221,23 @@ class HealthDataProvider extends ChangeNotifier {
     final key = '${date.year}-${date.month}-${date.day}';
     return _waterIntake[key] ?? 0;
   }
+  
+  int? getPainLevel(DateTime date) {
+    final key = '${date.year}-${date.month}-${date.day}';
+    return _painLevel[key];
+  }
+  
+  Future<void> setPainLevel(DateTime date, int level) async {
+    final key = '${date.year}-${date.month}-${date.day}';
+    _painLevel[key] = level;
+    await _savePainLevelData();
+    notifyListeners();
+  }
+  
   Future<void> incrementWaterIntake(DateTime date) async {
     final key = '${date.year}-${date.month}-${date.day}';
     _waterIntake[key] = (_waterIntake[key] ?? 0) + 1;
     await _saveWaterIntakeData();
-    await _saveHealthDataToFirestore();
     notifyListeners();
   }
   Future<void> decrementWaterIntake(DateTime date) async {
@@ -142,7 +245,6 @@ class HealthDataProvider extends ChangeNotifier {
     if ((_waterIntake[key] ?? 0) > 0) {
       _waterIntake[key] = _waterIntake[key]! - 1;
       await _saveWaterIntakeData();
-      await _saveHealthDataToFirestore();
       notifyListeners();
     }
   }
@@ -156,7 +258,6 @@ class HealthDataProvider extends ChangeNotifier {
     final key = '${date.year}-${date.month}-${date.day}';
     _bloodPressure[key] = [systolic, diastolic];
     await _saveVitalData();
-    await _saveHealthDataToFirestore();
     notifyListeners();
   }
 
@@ -169,7 +270,6 @@ class HealthDataProvider extends ChangeNotifier {
     final key = '${date.year}-${date.month}-${date.day}';
     _bloodSugar[key] = value;
     await _saveVitalData();
-    await _saveHealthDataToFirestore();
     notifyListeners();
   }
 
@@ -182,7 +282,6 @@ class HealthDataProvider extends ChangeNotifier {
     final key = '${date.year}-${date.month}-${date.day}';
     _peakFlow[key] = value;
     await _saveVitalData();
-    await _saveHealthDataToFirestore();
     notifyListeners();
   }
 
@@ -201,6 +300,59 @@ class HealthDataProvider extends ChangeNotifier {
     _errorMessage = null;
   }
 
+  // Method to handle errors gracefully and ensure local persistence
+  void _handleError(String operation, dynamic error) {
+    print('HealthDataProvider - Error in $operation: $error');
+    _setError('Failed to $operation: ${error.toString()}');
+    
+    // Always ensure local data is saved even when Firestore fails
+    _ensureImmediateLocalSave();
+  }
+
+  // Method to clear error and continue with local data
+  void _clearErrorAndContinue() {
+    _clearError();
+    print('HealthDataProvider - Error cleared, continuing with local data');
+  }
+
+  // Method to handle Firestore errors gracefully
+  void _handleFirestoreError(String operation, dynamic error) {
+    print('HealthDataProvider - Firestore error in $operation: $error');
+    
+    // Don't show error to user for Firestore failures - just log and continue with local data
+    print('HealthDataProvider - Continuing with local data after Firestore error');
+    
+    // Ensure local data is saved
+    _ensureImmediateLocalSave();
+    
+    // Clear any existing error state
+    _clearError();
+  }
+
+  // Method to ensure app never gets stuck due to Firestore issues
+  void _ensureAppNeverStuck() {
+    // If we've been loading for too long, force load from SharedPreferences
+    if (_isLoading && _medications == null) {
+      print('HealthDataProvider - App seems stuck, forcing local data load...');
+      loadAllDataFromSharedPreferences().then((_) {
+        _setLoading(false);
+        _clearError();
+        notifyListeners();
+      });
+    }
+  }
+
+  // Debug method to print current state
+  void debugPrintState() {
+    print('HealthDataProvider - Current State:');
+    print('  - isLoading: $_isLoading');
+    print('  - errorMessage: $_errorMessage');
+    print('  - medications: ${_medications?.length ?? 'null'}');
+    print('  - appointments: ${_appointments?.length ?? 'null'}');
+    print('  - logs: ${_logs?.length ?? 'null'}');
+    print('  - userProfile: ${_userProfile?.name ?? 'null'}');
+  }
+
   // Data persistence methods
   Future<void> _loadData() async {
     try {
@@ -210,22 +362,25 @@ class HealthDataProvider extends ChangeNotifier {
       final prefs = await SharedPreferences.getInstance();
       
       // Load medications
-      final medicationsJson = prefs.getStringList(_medicationsKey) ?? [];
-      _medications = medicationsJson
-          .map((json) => Medication.fromJson(jsonDecode(json)))
-          .toList();
+      final medicationsJson = prefs.getString(_medicationsKey);
+      if (medicationsJson != null) {
+        final medicationsList = jsonDecode(medicationsJson) as List;
+        _medications = medicationsList.map((medData) => Medication.fromJson(medData)).toList();
+      }
       
       // Load logs
-      final logsJson = prefs.getStringList(_logsKey) ?? [];
-      _logs = logsJson
-          .map((json) => LogEntry.fromJson(jsonDecode(json)))
-          .toList();
+      final logsJson = prefs.getString(_logsKey);
+      if (logsJson != null) {
+        final logsList = jsonDecode(logsJson) as List;
+        _logs = logsList.map((logData) => LogEntry.fromJson(logData)).toList();
+      }
       
       // Load appointments
-      final appointmentsJson = prefs.getStringList(_appointmentsKey) ?? [];
-      _appointments = appointmentsJson
-          .map((json) => Appointment.fromJson(jsonDecode(json)))
-          .toList();
+      final appointmentsJson = prefs.getString(_appointmentsKey);
+      if (appointmentsJson != null) {
+        final appointmentsList = jsonDecode(appointmentsJson) as List;
+        _appointments = appointmentsList.map((aptData) => Appointment.fromJson(aptData)).toList();
+      }
       
       // Load water intake
       final waterIntakeJson = prefs.getString('waterIntake');
@@ -287,22 +442,22 @@ class HealthDataProvider extends ChangeNotifier {
       final prefs = await SharedPreferences.getInstance();
       
       // Save medications
-      final medicationsJson = (_medications ?? [])
-          .map((med) => jsonEncode(med.toJson()))
-          .toList();
-      await prefs.setStringList(_medicationsKey, medicationsJson);
+      if (_medications != null) {
+        final medicationsJson = _medications!.map((med) => med.toJson()).toList();
+        await prefs.setString(_medicationsKey, jsonEncode(medicationsJson));
+      }
       
       // Save logs
-      final logsJson = (_logs ?? [])
-          .map((log) => jsonEncode(log.toJson(forFirestore: false)))
-          .toList();
-      await prefs.setStringList(_logsKey, logsJson);
+      if (_logs != null) {
+        final logsJson = _logs!.map((log) => log.toJson(forFirestore: false)).toList();
+        await prefs.setString(_logsKey, jsonEncode(logsJson));
+      }
       
       // Save appointments
-      final appointmentsJson = (_appointments ?? [])
-          .map((appt) => jsonEncode(appt.toJson(forFirestore: false)))
-          .toList();
-      await prefs.setStringList(_appointmentsKey, appointmentsJson);
+      if (_appointments != null) {
+        final appointmentsJson = _appointments!.map((appt) => appt.toJson(forFirestore: false)).toList();
+        await prefs.setString(_appointmentsKey, jsonEncode(appointmentsJson));
+      }
 
       // Save water intake and vital data separately
       await _saveWaterIntakeData();
@@ -332,6 +487,15 @@ class HealthDataProvider extends ChangeNotifier {
     }
   }
 
+  Future<void> _savePainLevelData() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('painLevel', jsonEncode(_painLevel));
+    } catch (e) {
+      _setError('Failed to save pain level data: ${e.toString()}');
+    }
+  }
+
   Future<void> _saveStreakData() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -356,6 +520,7 @@ class HealthDataProvider extends ChangeNotifier {
           'bloodPressure': _bloodPressure,
           'bloodSugar': _bloodSugar,
           'peakFlow': _peakFlow,
+          'painLevel': _painLevel,
           'streakData': {
             'completionStatus': _dailyMedicationCompletionStatus,
             'currentStreak': _currentStreak,
@@ -692,115 +857,27 @@ class HealthDataProvider extends ChangeNotifier {
     }
   }
 
-  // Called by ChangeNotifierProxyProvider when dependencies change
-  void update(AuthService auth, FirestoreService firestore) {
-    _auth = auth;
-    _firestore = firestore;
-
-    // Cancel any existing subscription to avoid memory leaks
-    _medicationSubscription?.cancel();
-    _appointmentSubscription?.cancel();
-    _logSubscription?.cancel();
-    _profileSubscription?.cancel();
-    _healthDataSubscription?.cancel();
-
-    if (auth.currentUser != null) {
-      // Set lists to null to indicate loading state
-      _medications = null;
-      _appointments = null;
-      _logs = null;
-      _userProfile = null;
-      notifyListeners();
-
-      // If user is logged in, listen to Firestore
-      _medicationSubscription = _firestore?.medicationsStream(auth.currentUser!.uid).listen((meds) {
-        _medications = meds.map((m) => Medication.fromJson(m)).toList();
-        // Update streaks whenever medications change
-        _updateMedicationStreaks();
-        notifyListeners();
-      }, onError: (e) {
-        _setError('Failed to load medications: $e');
-        _medications = []; // Set to empty list on error
-        notifyListeners();
-      });
-      _appointmentSubscription = _firestore?.appointmentsStream(auth.currentUser!.uid).listen((appointments) {
-        _appointments = appointments.map((a) => Appointment.fromJson(a)).toList();
-        notifyListeners();
-      }, onError: (e) {
-        _setError('Failed to load appointments: $e');
-        _appointments = []; // Set to empty list on error
-        notifyListeners();
-      });
-      _logSubscription = _firestore?.logsStream(auth.currentUser!.uid).listen((logs) {
-        _logs = logs.map((l) => LogEntry.fromJson(l)).toList();
-        // Update streaks whenever logs change
-        _updateMedicationStreaks();
-        notifyListeners();
-      }, onError: (e) {
-        _setError('Failed to load logs: $e');
-        _logs = []; // Set to empty list on error
-        notifyListeners();
-      });
-      _profileSubscription = _firestore?.userProfileStream(auth.currentUser!.uid).listen((profile) {
-        _userProfile = profile;
-        
-        // If profile doesn't exist, create a default one
-        if (profile == null && auth.currentUser != null) {
-          _createDefaultProfile(auth.currentUser!);
-        }
-        
-        notifyListeners();
-      }, onError: (e) {
-        _setError('Failed to load profile: $e');
-        _userProfile = null; // Can remain null on error
-        notifyListeners();
-      });
-      
-      // Listen to health data changes
-      _healthDataSubscription = _firestore?.healthDataStream(auth.currentUser!.uid).listen((healthData) {
-        if (healthData != null) {
-          // Load water intake
-          if (healthData['waterIntake'] != null) {
-            _waterIntake = Map<String, int>.from(healthData['waterIntake']);
-          }
-          
-          // Load blood pressure
-          if (healthData['bloodPressure'] != null) {
-            _bloodPressure = (healthData['bloodPressure'] as Map<String, dynamic>)
-                .map((k, v) => MapEntry(k, List<int>.from(v)));
-          }
-          
-          // Load blood sugar
-          if (healthData['bloodSugar'] != null) {
-            _bloodSugar = Map<String, int>.from(healthData['bloodSugar']);
-          }
-          
-          // Load peak flow
-          if (healthData['peakFlow'] != null) {
-            _peakFlow = Map<String, int>.from(healthData['peakFlow']);
-          }
-          
-          // Load streak data
-          if (healthData['streakData'] != null) {
-            final streakData = healthData['streakData'];
-            _dailyMedicationCompletionStatus = Map<String, bool>.from(streakData['completionStatus'] ?? {});
-            _currentStreak = streakData['currentStreak'] ?? 0;
-            _longestStreak = streakData['longestStreak'] ?? 0;
-          }
-          
-          notifyListeners();
-        }
-      }, onError: (e) {
-        _setError('Failed to load health data: $e');
-      });
-    } else {
-      // If user is logged out, clear all data
-      _medications = [];
-      _appointments = [];
-      _logs = [];
-      _userProfile = null;
-      notifyListeners();
+  // Method to ensure immediate local persistence of all data
+  Future<void> _ensureImmediateLocalSave() async {
+    try {
+      print('HealthDataProvider - Ensuring immediate local save of all data...');
+      await saveAllDataToSharedPreferences();
+      print('HealthDataProvider - ✅ All data immediately saved to SharedPreferences');
+    } catch (e) {
+      print('HealthDataProvider - Error in immediate local save: $e');
     }
+  }
+
+  // DISABLED: Enhanced update method that loads from SharedPreferences first
+  void update(AuthService auth, FirestoreService firestore) {
+    print('HealthDataProvider - update method disabled, using initializeServices instead');
+    // Do nothing - use initializeServices method instead
+  }
+
+  // DISABLED: Firestore connections to avoid errors
+  void _attemptFirestoreConnections() {
+    print('HealthDataProvider - Firestore connections disabled, using SharedPreferences only');
+    // Do nothing - all data will be managed through SharedPreferences
   }
 
   @override
@@ -814,84 +891,193 @@ class HealthDataProvider extends ChangeNotifier {
   }
 
   Future<Medication> addMedication(Medication medication) async {
+    try {
     final uid = _auth?.currentUser?.uid;
-    if (uid != null) {
-      final docRef = await _firestore?.addMedication(medication, uid);
-      return medication.copyWith(id: docRef?.id);
+      if (uid == null) {
+        print('HealthDataProvider - No current user, cannot add medication');
+        return medication;
+      }
+      
+      // Add to local list first
+      _medications ??= [];
+      final newMedication = medication.copyWith(id: DateTime.now().millisecondsSinceEpoch.toString());
+      _medications!.add(newMedication);
+      
+      // Save to SharedPreferences immediately
+      await saveAllDataToSharedPreferences();
+      print('HealthDataProvider - Added medication to SharedPreferences: ${medication.name}');
+      
+      // Update streaks
+      _updateMedicationStreaks();
+      
+      notifyListeners();
+      return newMedication;
+    } catch (e) {
+      print('HealthDataProvider - Error adding medication: $e');
+      return medication;
     }
-    return medication; // Or throw an error
   }
 
   Future<void> updateMedication(String docId, Medication medication) async {
     final uid = _auth?.currentUser?.uid;
     if (uid != null) {
-      await _firestore?.updateMedication(docId, medication); // Corrected arguments
+      try {
+        // Update local list
+        final index = _medications?.indexWhere((med) => med.id == docId);
+        if (index != null && index >= 0) {
+          _medications![index] = medication;
+          await saveAllDataToSharedPreferences();
+          print('HealthDataProvider - Updated medication in SharedPreferences: ${medication.name}');
+        }
+        
+        notifyListeners();
+      } catch (e) {
+        print('HealthDataProvider - Error updating medication: $e');
+      }
     }
   }
 
   Future<void> deleteMedication(String docId) async {
     final uid = _auth?.currentUser?.uid;
     if (uid != null) {
-      await _firestore?.deleteMedication(docId); // Corrected arguments
+      try {
+        // Remove from local list
+        _medications?.removeWhere((med) => med.id == docId);
+        await saveAllDataToSharedPreferences();
+        print('HealthDataProvider - Deleted medication from SharedPreferences');
+        
+        notifyListeners();
+      } catch (e) {
+        print('HealthDataProvider - Error deleting medication: $e');
+      }
     }
   }
 
   Future<Appointment> addAppointment(Appointment appointment) async {
+    try {
     final uid = _auth?.currentUser?.uid;
-    if (uid != null) {
-      final docRef = await _firestore!.addAppointment(appointment, uid);
-      return Appointment(
-        id: docRef.id,
-        title: appointment.title,
-        dateTime: appointment.dateTime,
-        location: appointment.location,
-        notes: appointment.notes,
-      );
+      if (uid == null) {
+        print('HealthDataProvider - No current user, cannot add appointment');
+        return appointment;
+      }
+      
+      // Add to local list first
+      _appointments ??= [];
+      final newAppointment = appointment.copyWith(id: DateTime.now().millisecondsSinceEpoch.toString());
+      _appointments!.add(newAppointment);
+      
+      // Save to SharedPreferences immediately
+      await saveAllDataToSharedPreferences();
+      print('HealthDataProvider - Added appointment to SharedPreferences: ${appointment.title}');
+      
+      notifyListeners();
+      return newAppointment;
+    } catch (e) {
+      print('HealthDataProvider - Error adding appointment: $e');
+      return appointment;
     }
-    throw Exception('User not logged in');
   }
 
   Future<void> editAppointment(String docId, Appointment appointment) async {
     final uid = _auth?.currentUser?.uid;
     if (uid != null) {
-      await _firestore?.updateAppointment(docId, appointment, uid);
+      try {
+        // Update local list
+        final index = _appointments?.indexWhere((apt) => apt.id == docId);
+        if (index != null && index >= 0) {
+          _appointments![index] = appointment;
+          await saveAllDataToSharedPreferences();
+          print('HealthDataProvider - Updated appointment in SharedPreferences: ${appointment.title}');
+        }
+        
+        notifyListeners();
+      } catch (e) {
+        print('HealthDataProvider - Error updating appointment: $e');
+      }
     }
   }
 
   Future<void> deleteAppointment(String docId) async {
     final uid = _auth?.currentUser?.uid;
     if (uid != null) {
-      await _firestore?.deleteAppointment(docId, uid);
+      try {
+        // Remove from local list
+        _appointments?.removeWhere((apt) => apt.id == docId);
+        await saveAllDataToSharedPreferences();
+        print('HealthDataProvider - Deleted appointment from SharedPreferences');
+        
+        notifyListeners();
+      } catch (e) {
+        print('HealthDataProvider - Error deleting appointment: $e');
+      }
     }
   }
 
   Future<LogEntry> addLog(LogEntry log) async {
-    final uid = _auth?.currentUser?.uid;
-    if (uid != null) {
-      final docRef = await _firestore!.addLog(log, uid);
-      return LogEntry(
-        id: docRef.id,
-        date: log.date,
-        description: log.description,
-        type: log.type,
-        feeling: log.feeling,
-        symptoms: log.symptoms,
-      );
+    try {
+      print('HealthDataProvider - addLog called with: ${log.description}');
+      final uid = _auth?.currentUser?.uid;
+      if (uid == null) {
+        print('HealthDataProvider - No current user, cannot add log');
+        return log;
+      }
+      
+      // Add to local list first
+      _logs ??= [];
+      final newLog = log.copyWith(id: DateTime.now().millisecondsSinceEpoch.toString());
+      _logs!.add(newLog);
+      
+      print('HealthDataProvider - Added log to local list. Total logs: ${_logs!.length}');
+      print('HealthDataProvider - New log: ${newLog.description} | Date: ${newLog.date.toIso8601String()} | ID: ${newLog.id}');
+      
+      // Save to SharedPreferences immediately
+      await saveAllDataToSharedPreferences();
+      print('HealthDataProvider - Added log to SharedPreferences: ${log.description}');
+      
+      // Update streaks
+      _updateMedicationStreaks();
+      
+      notifyListeners();
+      print('HealthDataProvider - Notified listeners after adding log');
+      return newLog;
+    } catch (e) {
+      print('HealthDataProvider - Error adding log: $e');
+      return log;
     }
-    throw Exception('User not logged in');
   }
 
   Future<void> editLog(String docId, LogEntry log) async {
     final uid = _auth?.currentUser?.uid;
     if (uid != null) {
-      await _firestore?.updateLog(docId, log, uid);
+      try {
+        // Update local list
+        final index = _logs?.indexWhere((l) => l.id == docId);
+        if (index != null && index >= 0) {
+          _logs![index] = log;
+          await saveAllDataToSharedPreferences();
+          print('HealthDataProvider - Updated log in SharedPreferences: ${log.description}');
+        }
+        
+        notifyListeners();
+      } catch (e) {
+        print('HealthDataProvider - Error updating log: $e');
+      }
     }
   }
 
   Future<void> deleteLog(String docId) async {
     final uid = _auth?.currentUser?.uid;
     if (uid != null) {
-      await _firestore?.deleteLog(docId, uid);
+      try {
+        // Remove from local list
+        _logs?.removeWhere((l) => l.id == docId);
+        await saveAllDataToSharedPreferences();
+        print('HealthDataProvider - Deleted log from SharedPreferences');
+        
+        notifyListeners();
+      } catch (e) {
+        print('HealthDataProvider - Error deleting log: $e');
+      }
     }
   }
 
@@ -946,15 +1132,34 @@ class HealthDataProvider extends ChangeNotifier {
     try {
       _setLoading(true);
       _clearError();
-      await Future.delayed(const Duration(milliseconds: 500));
-      _logs!.add(LogEntry(
+      
+      // Add to local list first
+      _logs ??= [];
+      final newLog = LogEntry(
         date: date,
         description: 'Daily feeling and symptoms',
         type: 'daily',
         feeling: feeling,
         symptoms: symptoms,
-      ));
-      await _saveData();
+      );
+      _logs!.add(newLog);
+      
+      // Save to SharedPreferences immediately
+      await _ensureImmediateLocalSave();
+      print('HealthDataProvider - Added daily feeling log to SharedPreferences');
+      
+      // Try to save to Firestore (non-blocking)
+      final uid = _auth?.currentUser?.uid;
+      if (uid != null && _firestore != null) {
+        try {
+          final docRef = await _firestore!.addLog(newLog, uid);
+          print('HealthDataProvider - Successfully added daily feeling log to Firestore');
+        } catch (e) {
+          print('HealthDataProvider - Firestore add daily feeling log failed: $e');
+          // Continue with local data since Firestore failed
+        }
+      }
+      
       notifyListeners();
     } catch (e) {
       _setError('Failed to add daily feeling log: ${e.toString()}');
@@ -999,24 +1204,735 @@ class HealthDataProvider extends ChangeNotifier {
   }
 
   Future<void> updateUserProfile(UserProfile profile) async {
-    await _firestore?.setUserProfile(profile);
+    try {
+      print('HealthDataProvider - updateUserProfile called for user: ${profile.email}');
+      
+      // Update local profile immediately
+      _userProfile = profile;
+      notifyListeners();
+      
+      // Save to SharedPreferences immediately
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('user_name', profile.name);
+      if (profile.age != null) {
+        await prefs.setString('user_age', profile.age!);
+      }
+      if (profile.healthCondition != null) {
+        await prefs.setString('user_condition', profile.healthCondition!);
+      }
+      print('HealthDataProvider - Profile saved to SharedPreferences');
+      
+      print('HealthDataProvider - Profile update completed successfully');
+    } catch (e) {
+      print('HealthDataProvider - Error updating user profile: $e');
+      throw e;
+    }
   }
 
   // Create a default profile for users who don't have one
   Future<void> _createDefaultProfile(User user) async {
     try {
-      // Try to get the name from onboarding data
+      // Get all onboarding data
       final prefs = await SharedPreferences.getInstance();
       final onboardingName = prefs.getString('user_name') ?? '';
+      final onboardingAge = prefs.getString('user_age');
+      final onboardingCondition = prefs.getString('user_condition');
       
       final defaultProfile = UserProfile(
         uid: user.uid,
         name: onboardingName.isNotEmpty ? onboardingName : (user.displayName ?? ''),
         email: user.email ?? '',
+        age: onboardingAge,
+        healthCondition: onboardingCondition,
+        createdAt: DateTime.now(),
       );
-      await _firestore?.setUserProfile(defaultProfile);
+      
+      // Save to SharedPreferences instead of Firestore
+      await updateUserProfile(defaultProfile);
+      print('HealthDataProvider - Default profile created and saved to SharedPreferences');
     } catch (e) {
-      _setError('Failed to create profile: $e');
+      print('HealthDataProvider - Error creating default profile: $e');
+      // Don't set error state for profile creation failures
+    }
+  }
+
+  // Load medications from SharedPreferences as fallback
+  Future<void> loadMedicationsFromSharedPreferences() async {
+    try {
+      print('HealthDataProvider - Loading medications from SharedPreferences...');
+      final prefs = await SharedPreferences.getInstance();
+      final medicationsJson = prefs.getString('medications');
+      
+      if (medicationsJson != null) {
+        final medicationsList = jsonDecode(medicationsJson) as List;
+        _medications = medicationsList.map((medData) => Medication.fromJson(medData)).toList();
+        
+        print('HealthDataProvider - Loaded ${_medications!.length} medications from SharedPreferences');
+        notifyListeners();
+      }
+    } catch (e) {
+      print('HealthDataProvider - Error loading medications from SharedPreferences: $e');
+    }
+  }
+
+  // Load user profile from SharedPreferences as fallback
+  Future<void> loadUserProfileFromSharedPreferences() async {
+    try {
+      print('HealthDataProvider - Loading user profile from SharedPreferences...');
+      final prefs = await SharedPreferences.getInstance();
+      
+      final name = prefs.getString('user_name');
+      final age = prefs.getString('user_age');
+      final condition = prefs.getString('user_condition');
+      
+      if (name != null && _auth?.currentUser != null) {
+        _userProfile = UserProfile(
+          uid: _auth!.currentUser!.uid,
+          name: name,
+          email: _auth!.currentUser!.email ?? '',
+          age: age,
+          healthCondition: condition,
+          createdAt: DateTime.now(),
+        );
+        
+        print('HealthDataProvider - Loaded user profile from SharedPreferences: ${_userProfile!.name}');
+        notifyListeners();
+      }
+    } catch (e) {
+      print('HealthDataProvider - Error loading user profile from SharedPreferences: $e');
+    }
+  }
+
+  // Save all health data to SharedPreferences
+  Future<void> saveAllDataToSharedPreferences() async {
+    try {
+      print('HealthDataProvider - Saving all health data to SharedPreferences...');
+      final prefs = await SharedPreferences.getInstance();
+      
+      // Save medications
+      if (_medications != null) {
+        final medicationsJson = _medications!.map((med) => med.toJson()).toList();
+        await prefs.setString(_medicationsKey, jsonEncode(medicationsJson));
+        print('HealthDataProvider - Saved ${_medications!.length} medications to SharedPreferences');
+      }
+      
+      // Save appointments
+      if (_appointments != null) {
+        final appointmentsJson = _appointments!.map((apt) => apt.toJson()).toList();
+        await prefs.setString(_appointmentsKey, jsonEncode(appointmentsJson));
+        print('HealthDataProvider - Saved ${_appointments!.length} appointments to SharedPreferences');
+      }
+      
+      // Save logs
+      if (_logs != null) {
+        final logsJson = _logs!.map((log) => log.toJson(forFirestore: false)).toList();
+        await prefs.setString(_logsKey, jsonEncode(logsJson));
+        print('HealthDataProvider - Saved ${_logs!.length} logs to SharedPreferences');
+      }
+      
+      // Save water intake
+      if (_waterIntake.isNotEmpty) {
+        await prefs.setString('waterIntake', jsonEncode(_waterIntake));
+        print('HealthDataProvider - Saved water intake data to SharedPreferences');
+      }
+      
+      // Save blood pressure
+      if (_bloodPressure.isNotEmpty) {
+        await prefs.setString('bloodPressure', jsonEncode(_bloodPressure));
+        print('HealthDataProvider - Saved blood pressure data to SharedPreferences');
+      }
+      
+      // Save blood sugar
+      if (_bloodSugar.isNotEmpty) {
+        await prefs.setString('bloodSugar', jsonEncode(_bloodSugar));
+        print('HealthDataProvider - Saved blood sugar data to SharedPreferences');
+      }
+      
+      // Save peak flow
+      if (_peakFlow.isNotEmpty) {
+        await prefs.setString('peakFlow', jsonEncode(_peakFlow));
+        print('HealthDataProvider - Saved peak flow data to SharedPreferences');
+      }
+
+      // Save pain level
+      if (_painLevel.isNotEmpty) {
+        await prefs.setString('painLevel', jsonEncode(_painLevel));
+        print('HealthDataProvider - Saved pain level data to SharedPreferences');
+      }
+      
+      // Save streak data
+      final streakData = {
+        'completionStatus': _dailyMedicationCompletionStatus,
+        'currentStreak': _currentStreak,
+        'longestStreak': _longestStreak,
+      };
+      await prefs.setString('streakData', jsonEncode(streakData));
+      print('HealthDataProvider - Saved streak data to SharedPreferences');
+      
+      print('HealthDataProvider - ✅ All health data saved to SharedPreferences');
+    } catch (e) {
+      print('HealthDataProvider - Error saving all data to SharedPreferences: $e');
+    }
+  }
+
+  // Load all health data from SharedPreferences
+  Future<void> loadAllDataFromSharedPreferences() async {
+    try {
+      print('HealthDataProvider - Loading all health data from SharedPreferences...');
+      final prefs = await SharedPreferences.getInstance();
+      
+      // Load medications
+      final medicationsJson = prefs.getString(_medicationsKey);
+      if (medicationsJson != null) {
+        final medicationsList = jsonDecode(medicationsJson) as List;
+        _medications = medicationsList.map((medData) => Medication.fromJson(medData)).toList();
+        print('HealthDataProvider - Loaded ${_medications!.length} medications from SharedPreferences');
+      }
+      
+      // Load appointments
+      final appointmentsJson = prefs.getString(_appointmentsKey);
+      if (appointmentsJson != null) {
+        final appointmentsList = jsonDecode(appointmentsJson) as List;
+        _appointments = appointmentsList.map((aptData) => Appointment.fromJson(aptData)).toList();
+        print('HealthDataProvider - Loaded ${_appointments!.length} appointments from SharedPreferences');
+      }
+      
+      // Load logs
+      final logsJson = prefs.getString(_logsKey);
+      if (logsJson != null) {
+        final logsList = jsonDecode(logsJson) as List;
+        _logs = logsList.map((logData) => LogEntry.fromJson(logData)).toList();
+        print('HealthDataProvider - Loaded ${_logs!.length} logs from SharedPreferences');
+      }
+      
+      // Load user profile from SharedPreferences
+      final name = prefs.getString('user_name');
+      final age = prefs.getString('user_age');
+      final condition = prefs.getString('user_condition');
+      
+      if (name != null && _auth?.currentUser != null) {
+        _userProfile = UserProfile(
+          uid: _auth!.currentUser!.uid,
+          name: name,
+          email: _auth!.currentUser!.email ?? '',
+          age: age,
+          healthCondition: condition,
+          createdAt: DateTime.now(),
+        );
+        print('HealthDataProvider - Loaded user profile from SharedPreferences: ${_userProfile!.name}');
+      }
+      
+      // Load water intake
+      final waterIntakeJson = prefs.getString('waterIntake');
+      if (waterIntakeJson != null) {
+        _waterIntake = Map<String, int>.from(jsonDecode(waterIntakeJson));
+        print('HealthDataProvider - Loaded water intake data from SharedPreferences');
+      }
+      
+      // Load blood pressure
+      final bloodPressureJson = prefs.getString('bloodPressure');
+      if (bloodPressureJson != null) {
+        _bloodPressure = Map<String, List<int>>.from(jsonDecode(bloodPressureJson));
+        print('HealthDataProvider - Loaded blood pressure data from SharedPreferences');
+      }
+      
+      // Load blood sugar
+      final bloodSugarJson = prefs.getString('bloodSugar');
+      if (bloodSugarJson != null) {
+        _bloodSugar = Map<String, int>.from(jsonDecode(bloodSugarJson));
+        print('HealthDataProvider - Loaded blood sugar data from SharedPreferences');
+      }
+      
+      // Load peak flow
+      final peakFlowJson = prefs.getString('peakFlow');
+      if (peakFlowJson != null) {
+        _peakFlow = Map<String, int>.from(jsonDecode(peakFlowJson));
+        print('HealthDataProvider - Loaded peak flow data from SharedPreferences');
+      }
+      
+      // Load pain level
+      final painLevelJson = prefs.getString('painLevel');
+      if (painLevelJson != null) {
+        _painLevel = Map<String, int>.from(jsonDecode(painLevelJson));
+        print('HealthDataProvider - Loaded pain level data from SharedPreferences');
+      }
+      
+      // Load streak data
+      final streakDataJson = prefs.getString('streakData');
+      if (streakDataJson != null) {
+        final streakData = jsonDecode(streakDataJson);
+        _dailyMedicationCompletionStatus = Map<String, bool>.from(streakData['completionStatus'] ?? {});
+        _currentStreak = streakData['currentStreak'] ?? 0;
+        _longestStreak = streakData['longestStreak'] ?? 0;
+        print('HealthDataProvider - Loaded streak data from SharedPreferences');
+      }
+      
+      print('HealthDataProvider - ✅ All health data loaded from SharedPreferences');
+      notifyListeners();
+    } catch (e) {
+      print('HealthDataProvider - Error loading all data from SharedPreferences: $e');
+    }
+  }
+
+  // Load appointments from SharedPreferences as fallback
+  Future<void> loadAppointmentsFromSharedPreferences() async {
+    try {
+      print('HealthDataProvider - Loading appointments from SharedPreferences...');
+      final prefs = await SharedPreferences.getInstance();
+      final appointmentsJson = prefs.getString('appointments');
+      
+      if (appointmentsJson != null) {
+        final appointmentsList = jsonDecode(appointmentsJson) as List;
+        _appointments = appointmentsList.map((aptData) => Appointment.fromJson(aptData)).toList();
+        print('HealthDataProvider - Loaded ${_appointments!.length} appointments from SharedPreferences');
+        notifyListeners();
+      }
+    } catch (e) {
+      print('HealthDataProvider - Error loading appointments from SharedPreferences: $e');
+    }
+  }
+
+  // Load logs from SharedPreferences as fallback
+  Future<void> loadLogsFromSharedPreferences() async {
+    try {
+      print('HealthDataProvider - Loading logs from SharedPreferences...');
+      final prefs = await SharedPreferences.getInstance();
+      final logsJson = prefs.getString(_logsKey);
+      
+      if (logsJson != null) {
+        final logsList = jsonDecode(logsJson) as List;
+        _logs = logsList.map((logData) => LogEntry.fromJson(logData)).toList();
+        print('HealthDataProvider - Loaded ${_logs!.length} logs from SharedPreferences');
+        notifyListeners();
+      }
+    } catch (e) {
+      print('HealthDataProvider - Error loading logs from SharedPreferences: $e');
+    }
+  }
+
+  // Update medication streak tracking
+  Future<void> updateMedicationStreak(DateTime date) async {
+    try {
+      print('HealthDataProvider - Updating medication streak for date: ${date.toIso8601String()}');
+      
+      // Get all medications for the user
+      final userMedications = _medications ?? [];
+      if (userMedications.isEmpty) {
+        print('HealthDataProvider - No medications found, skipping streak update');
+        return;
+      }
+      
+      // Get all medication logs for the given date
+      final dateKey = '${date.year}-${date.month}-${date.day}';
+      final medicationLogsForDate = _logs?.where((log) => 
+        log.type == 'medication' &&
+        log.date.year == date.year &&
+        log.date.month == date.month &&
+        log.date.day == date.day
+      ).toList() ?? [];
+      
+      // Check if all medications were taken on this date
+      final takenMedications = medicationLogsForDate
+          .where((log) => log.description.startsWith('Took'))
+          .map((log) => log.description.replaceFirst('Took ', ''))
+          .toSet();
+      
+      final allMedicationNames = userMedications.map((med) => med.name).toSet();
+      final allTaken = allMedicationNames.every((medName) => takenMedications.contains(medName));
+      
+      // Update completion status for this date
+      _dailyMedicationCompletionStatus[dateKey] = allTaken;
+      
+      // Recalculate streaks
+      _recalculateStreaks();
+      
+      // Save updated streak data
+      await _saveStreakData();
+      await saveAllDataToSharedPreferences();
+      
+      print('HealthDataProvider - Streak updated: allTaken=$allTaken, currentStreak=$_currentStreak, longestStreak=$_longestStreak');
+      notifyListeners();
+    } catch (e) {
+      print('HealthDataProvider - Error updating medication streak: $e');
+    }
+  }
+
+  // Recalculate medication streaks
+  void _recalculateStreaks() {
+    try {
+      print('HealthDataProvider - Recalculating medication streaks...');
+      
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+      int currentStreak = 0;
+      int longestStreak = _longestStreak;
+      
+      // Check consecutive days backwards from today
+      for (int i = 0; i < 365; i++) { // Check up to 1 year back
+        final checkDate = today.subtract(Duration(days: i));
+        final dateKey = '${checkDate.year}-${checkDate.month}-${checkDate.day}';
+        
+        if (_dailyMedicationCompletionStatus[dateKey] == true) {
+          currentStreak++;
+        } else {
+          break; // Streak broken
+        }
+      }
+      
+      _currentStreak = currentStreak;
+      
+      // Update longest streak if current is longer
+      if (currentStreak > longestStreak) {
+        longestStreak = currentStreak;
+        _longestStreak = longestStreak;
+      }
+      
+      print('HealthDataProvider - Streak calculation complete: current=$currentStreak, longest=$longestStreak');
+    } catch (e) {
+      print('HealthDataProvider - Error recalculating streaks: $e');
+    }
+  }
+
+  // Handle user logout - clear data and save empty state
+  void handleUserLogout() {
+    print('HealthDataProvider - Handling user logout');
+    
+    // Cancel all subscriptions
+    _medicationSubscription?.cancel();
+    _appointmentSubscription?.cancel();
+    _logSubscription?.cancel();
+    _profileSubscription?.cancel();
+    _healthDataSubscription?.cancel();
+    
+    // Clear all data
+    _medications = [];
+    _appointments = [];
+    _logs = [];
+    _userProfile = null;
+    _waterIntake.clear();
+    _bloodPressure.clear();
+    _bloodSugar.clear();
+    _peakFlow.clear();
+    _painLevel.clear();
+    _dailyMedicationCompletionStatus.clear();
+    _currentStreak = 0;
+    _longestStreak = 0;
+    
+    // Clear error state
+    _clearError();
+    
+    // Save empty state to SharedPreferences
+    _ensureImmediateLocalSave();
+    
+    notifyListeners();
+    print('HealthDataProvider - User logout handled, data cleared');
+  }
+
+  // Method to ensure app is always ready with local data
+  Future<void> ensureLocalDataReady() async {
+    try {
+      print('HealthDataProvider - Ensuring local data is ready...');
+      
+      // If we don't have data loaded yet, load from SharedPreferences
+      if (_medications == null || _appointments == null || _logs == null) {
+        print('HealthDataProvider - Loading missing data from SharedPreferences...');
+        await loadAllDataFromSharedPreferences();
+      }
+      
+      // Ensure we have at least empty lists if no data exists
+      _medications ??= [];
+      _appointments ??= [];
+      _logs ??= [];
+      
+      // Load user profile from SharedPreferences if not available
+      if (_userProfile == null && _auth?.currentUser != null) {
+        print('HealthDataProvider - Loading user profile from SharedPreferences...');
+        await loadUserProfileFromSharedPreferences();
+      }
+      
+      print('HealthDataProvider - ✅ Local data is ready');
+      notifyListeners();
+    } catch (e) {
+      print('HealthDataProvider - Error ensuring local data ready: $e');
+      // Set default empty state
+      _medications ??= [];
+      _appointments ??= [];
+      _logs ??= [];
+      notifyListeners();
+    }
+  }
+
+  // Method to manually sync all data to Firestore
+  Future<void> syncDataToFirestore(UserProfile userProfile) async {
+    try {
+      print('HealthDataProvider - Starting manual sync to Firestore...');
+      _setLoading(true);
+      _clearError();
+      
+      final uid = _auth?.currentUser?.uid;
+      if (uid == null) {
+        throw Exception('User not authenticated');
+      }
+      
+      if (_firestore == null) {
+        throw Exception('Firestore service not available');
+      }
+      
+      // Save user profile first
+      print('HealthDataProvider - Syncing user profile...');
+      await _firestore!.setUserProfile(userProfile);
+      
+      // Sync medications
+      print('HealthDataProvider - Syncing medications...');
+      for (final medication in _medications ?? []) {
+        try {
+          await _firestore!.addMedication(medication, uid);
+        } catch (e) {
+          print('HealthDataProvider - Error syncing medication ${medication.name}: $e');
+        }
+      }
+      
+      // Sync appointments
+      print('HealthDataProvider - Syncing appointments...');
+      for (final appointment in _appointments ?? []) {
+        try {
+          await _firestore!.addAppointment(appointment, uid);
+        } catch (e) {
+          print('HealthDataProvider - Error syncing appointment ${appointment.title}: $e');
+        }
+      }
+      
+      // Sync logs
+      print('HealthDataProvider - Syncing logs...');
+      for (final log in _logs ?? []) {
+        try {
+          await _firestore!.addLog(log, uid);
+        } catch (e) {
+          print('HealthDataProvider - Error syncing log: $e');
+        }
+      }
+      
+      // Sync health data
+      print('HealthDataProvider - Syncing health data...');
+      final healthData = {
+        'waterIntake': _waterIntake,
+        'bloodPressure': _bloodPressure,
+        'bloodSugar': _bloodSugar,
+        'peakFlow': _peakFlow,
+        'painLevel': _painLevel,
+        'streakData': {
+          'completionStatus': _dailyMedicationCompletionStatus,
+          'currentStreak': _currentStreak,
+          'longestStreak': _longestStreak,
+        },
+      };
+      await _firestore!.saveHealthData(uid, healthData);
+      
+      // Update sync status
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('last_sync_time', DateTime.now().toString());
+      await prefs.setString('sync_status', 'success');
+      
+      print('HealthDataProvider - ✅ Manual sync to Firestore completed successfully');
+      
+    } catch (e) {
+      print('HealthDataProvider - Error in manual sync to Firestore: $e');
+      
+      // Update sync status
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('sync_status', 'error');
+      
+      throw Exception('Failed to sync to cloud: ${e.toString()}');
+    } finally {
+      _setLoading(false);
+    }
+  }
+
+  // Method to manually restore data from Firestore
+  Future<void> restoreDataFromFirestore(UserProfile userProfile) async {
+    try {
+      print('HealthDataProvider - Starting manual restore from Firestore...');
+      _setLoading(true);
+      _clearError();
+      
+      final uid = _auth?.currentUser?.uid;
+      if (uid == null) {
+        throw Exception('User not authenticated');
+      }
+      
+      if (_firestore == null) {
+        throw Exception('Firestore service not available');
+      }
+      
+      // Get medications from Firestore
+      print('HealthDataProvider - Restoring medications...');
+      final medicationsSnapshot = await _firestore!.getMedications(uid);
+      _medications = medicationsSnapshot.map((m) => Medication.fromJson(m)).toList();
+      
+      // Get appointments from Firestore
+      print('HealthDataProvider - Restoring appointments...');
+      final appointmentsSnapshot = await _firestore!.getAppointments(uid);
+      _appointments = appointmentsSnapshot.map((a) => Appointment.fromJson(a)).toList();
+      
+      // Get logs from Firestore
+      print('HealthDataProvider - Restoring logs...');
+      final logsSnapshot = await _firestore!.getLogs(uid);
+      _logs = logsSnapshot.map((l) => LogEntry.fromJson(l)).toList();
+      
+      // Get health data from Firestore
+      print('HealthDataProvider - Restoring health data...');
+      final healthData = await _firestore!.getHealthData(uid);
+      if (healthData != null) {
+        _waterIntake = Map<String, int>.from(healthData['waterIntake'] ?? {});
+        _bloodPressure = (healthData['bloodPressure'] as Map<String, dynamic>?)?.map((k, v) => MapEntry(k, List<int>.from(v))) ?? {};
+        _bloodSugar = Map<String, int>.from(healthData['bloodSugar'] ?? {});
+        _peakFlow = Map<String, int>.from(healthData['peakFlow'] ?? {});
+        _painLevel = Map<String, int>.from(healthData['painLevel'] ?? {});
+        
+        // Load streak data
+        final streakData = healthData['streakData'] as Map<String, dynamic>?;
+        if (streakData != null) {
+          _dailyMedicationCompletionStatus = Map<String, bool>.from(streakData['completionStatus'] ?? {});
+          _currentStreak = streakData['currentStreak'] ?? 0;
+          _longestStreak = streakData['longestStreak'] ?? 0;
+        }
+      }
+      
+      // Save all restored data to SharedPreferences
+      await saveAllDataToSharedPreferences();
+      
+      // Update sync status
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('last_sync_time', DateTime.now().toString());
+      await prefs.setString('sync_status', 'success');
+      
+      print('HealthDataProvider - ✅ Manual restore from Firestore completed successfully');
+      notifyListeners();
+      
+    } catch (e) {
+      print('HealthDataProvider - Error in manual restore from Firestore: $e');
+      
+      // Update sync status
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('sync_status', 'error');
+      
+      throw Exception('Failed to restore from cloud: ${e.toString()}');
+    } finally {
+      _setLoading(false);
+    }
+  }
+
+  // Method to force reload all data from SharedPreferences
+  Future<void> forceReloadData() async {
+    try {
+      print('HealthDataProvider - Force reloading all data from SharedPreferences...');
+      _setLoading(true);
+      _clearError();
+      
+      await loadAllDataFromSharedPreferences();
+      
+      // Ensure we have at least empty lists
+      _medications ??= [];
+      _appointments ??= [];
+      _logs ??= [];
+      
+      print('HealthDataProvider - ✅ Force reload completed');
+      notifyListeners();
+    } catch (e) {
+      print('HealthDataProvider - Error in force reload: $e');
+      _setError('Failed to reload data: ${e.toString()}');
+    } finally {
+      _setLoading(false);
+    }
+  }
+
+  // Method to test Firestore connectivity
+  Future<void> testFirestoreConnection(UserProfile userProfile) async {
+    try {
+      print('HealthDataProvider - Testing Firestore connection...');
+      
+      if (_firestore == null) {
+        throw Exception('Firestore service not available');
+      }
+      
+      // Run comprehensive diagnosis
+      final diagnosis = await _firestore!.diagnoseFirestoreIssues();
+      print('HealthDataProvider - Firestore diagnosis results: $diagnosis');
+      
+      // Run operation tests
+      final operations = await _firestore!.testFirestoreOperations();
+      print('HealthDataProvider - Firestore operation tests: $operations');
+      
+      // Check if any tests failed
+      final failedTests = <String>[];
+      diagnosis.forEach((key, value) {
+        if (value.toString().startsWith('FAIL')) {
+          failedTests.add('$key: $value');
+        }
+      });
+      
+      operations.forEach((key, value) {
+        if (value.toString().startsWith('FAIL')) {
+          failedTests.add('$key: $value');
+        }
+      });
+      
+      if (failedTests.isNotEmpty) {
+        throw Exception('Firestore tests failed: ${failedTests.join(', ')}');
+      }
+      
+      print('HealthDataProvider - ✅ All Firestore tests passed');
+      
+    } catch (e) {
+      print('HealthDataProvider - ❌ Firestore connection test failed: $e');
+      throw Exception('Firestore connection failed: ${e.toString()}');
+    }
+  }
+
+  // Method to clear all user data (called on sign out)
+  Future<void> clearAllUserData() async {
+    try {
+      print('HealthDataProvider - Clearing all user data...');
+      
+      // Clear all in-memory data
+      _medications = [];
+      _logs = [];
+      _appointments = [];
+      _userProfile = null;
+      _waterIntake.clear();
+      _bloodPressure.clear();
+      _bloodSugar.clear();
+      _peakFlow.clear();
+      _painLevel.clear();
+      _dailyMedicationCompletionStatus.clear();
+      _currentStreak = 0;
+      _longestStreak = 0;
+      
+      // Clear error and loading states
+      _errorMessage = null;
+      _isLoading = false;
+      
+      // Cancel any active subscriptions
+      await _profileSubscription?.cancel();
+      await _medicationSubscription?.cancel();
+      await _appointmentSubscription?.cancel();
+      await _logSubscription?.cancel();
+      await _healthDataSubscription?.cancel();
+      
+      _profileSubscription = null;
+      _medicationSubscription = null;
+      _appointmentSubscription = null;
+      _logSubscription = null;
+      _healthDataSubscription = null;
+      
+      // Clear services
+      _auth = null;
+      _firestore = null;
+      
+      print('HealthDataProvider - ✅ All user data cleared');
+      notifyListeners();
+    } catch (e) {
+      print('HealthDataProvider - Error clearing user data: $e');
     }
   }
 } 

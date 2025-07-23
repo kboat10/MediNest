@@ -48,4 +48,23 @@ class LogEntry {
       'symptoms': symptoms,
     };
   }
+
+  // Add copyWith method
+  LogEntry copyWith({
+    String? id,
+    DateTime? date,
+    String? description,
+    String? type,
+    String? feeling,
+    List<String>? symptoms,
+  }) {
+    return LogEntry(
+      id: id ?? this.id,
+      date: date ?? this.date,
+      description: description ?? this.description,
+      type: type ?? this.type,
+      feeling: feeling ?? this.feeling,
+      symptoms: symptoms ?? this.symptoms,
+    );
+  }
 } 

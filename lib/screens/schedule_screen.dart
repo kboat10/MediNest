@@ -26,7 +26,7 @@ final Map<String, String> drugFacts = {
 };
 
 class ScheduleScreen extends StatefulWidget {
-  const ScheduleScreen({Key? key}) : super(key: key);
+  const ScheduleScreen({super.key});
 
   @override
   State<ScheduleScreen> createState() => _ScheduleScreenState();
@@ -34,7 +34,7 @@ class ScheduleScreen extends StatefulWidget {
 
 class _ScheduleScreenState extends State<ScheduleScreen> {
   final TextEditingController _searchController = TextEditingController();
-  String _searchQuery = '';
+  final String _searchQuery = '';
 
   // Helper to generate time options every 30 minutes from 6:00 AM to 10:00 PM
   List<String> getTimeOptions() {
@@ -67,17 +67,21 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
   Widget build(BuildContext context) {
     return Consumer<HealthDataProvider>(
       builder: (context, healthData, child) {
+        // Debug: Print current state
+        print('ScheduleScreen - Current medications count: ${healthData.medications.length}');
+        print('ScheduleScreen - isLoading: ${healthData.isLoading}');
+        
         // Decide what to show based on the provider's state
         Widget body;
-        if (healthData.medications == null) {
-          body = const LoadingWidget(message: 'Loading your schedule...');
-        } else if (healthData.errorMessage != null && healthData.medications!.isEmpty) {
+        if (healthData.isLoading) {
+          body = LoadingWidget(message: 'Loading medications...');
+        } else if (healthData.errorMessage != null && healthData.medications.isEmpty) {
           // Show error only if there are no meds to display
           body = _buildErrorWidget(context, healthData.errorMessage!, healthData.clearError);
-        } else if (healthData.medications!.isEmpty) {
+        } else if (healthData.medications.isEmpty) {
           body = _buildEmptyState();
         } else {
-          body = _buildMedicationList(healthData, healthData.medications!);
+          body = _buildMedicationList(healthData, healthData.medications);
         }
 
         return Scaffold(
@@ -85,8 +89,8 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
           body: body,
           floatingActionButton: FloatingActionButton(
             onPressed: () => _showAddDialog(context, healthData),
-            child: const Icon(Icons.add),
             tooltip: 'Add Medication',
+            child: const Icon(Icons.add),
           ),
         );
       },

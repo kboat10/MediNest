@@ -12,9 +12,13 @@ import '../services/shared_prefs_service.dart';
 import '../models/medication.dart';
 import '../models/appointment.dart';
 import '../models/log_entry.dart';
+import 'package:flutter/services.dart'; // Added for SharedPreferences
+import '../services/auth_service.dart'; // Added for AuthService
+import '../models/user_profile.dart'; // Added for UserProfile
+import 'package:shared_preferences/shared_preferences.dart'; // Added for SharedPreferences
 
 class DataManagementScreen extends StatefulWidget {
-  const DataManagementScreen({Key? key}) : super(key: key);
+  const DataManagementScreen({super.key});
 
   @override
   State<DataManagementScreen> createState() => _DataManagementScreenState();
@@ -23,6 +27,24 @@ class DataManagementScreen extends StatefulWidget {
 class _DataManagementScreenState extends State<DataManagementScreen> {
   bool _isImporting = false;
   bool _isCreatingBackup = false;
+  bool _isSyncingToCloud = false;
+  bool _isRestoringFromCloud = false;
+  String? _lastSyncTime;
+  String? _syncStatus;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSyncStatus();
+  }
+
+  Future<void> _loadSyncStatus() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _lastSyncTime = prefs.getString('last_sync_time');
+      _syncStatus = prefs.getString('sync_status');
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -53,6 +75,87 @@ class _DataManagementScreenState extends State<DataManagementScreen> {
                         _buildDataRow('Appointments', '${healthData.appointments.length} scheduled'),
                       ],
                     ),
+                  ),
+                ),
+
+                // Debug Section
+                _buildSectionHeader(context, 'Debug Tools'),
+                Card(
+                  margin: const EdgeInsets.only(bottom: 16),
+                  child: Column(
+                    children: [
+                      ListTile(
+                        leading: Icon(
+                          Icons.bug_report,
+                          color: Colors.orange,
+                        ),
+                        title: const Text('Debug Data State'),
+                        subtitle: const Text('Print current data state to console'),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () {
+                          healthData.debugPrintState();
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Debug info printed to console'),
+                              duration: Duration(seconds: 2),
+                            ),
+                          );
+                        },
+                      ),
+                      const Divider(height: 1),
+                      ListTile(
+                        leading: Icon(
+                          Icons.storage,
+                          color: Colors.blue,
+                        ),
+                        title: const Text('Check SharedPreferences'),
+                        subtitle: const Text('Check what data is stored locally'),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () async {
+                          await healthData.hasDataInSharedPreferences();
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('SharedPreferences check completed - see console'),
+                              duration: Duration(seconds: 2),
+                            ),
+                          );
+                        },
+                      ),
+                      const Divider(height: 1),
+                      ListTile(
+                        leading: Icon(
+                          Icons.add_circle,
+                          color: Colors.green,
+                        ),
+                        title: const Text('Add Sample Data'),
+                        subtitle: const Text('Add test medications and logs'),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () async {
+                          // Add sample medications
+                          final sampleMedication = Medication(
+                            name: 'Test Medication',
+                            time: '08:00 AM',
+                            reminderTime: '08:00 AM',
+                          );
+                          await healthData.addMedication(sampleMedication);
+                          
+                          // Add sample log
+                          final sampleLog = LogEntry(
+                            date: DateTime.now(),
+                            description: 'Took Test Medication',
+                            type: 'medication',
+                          );
+                          await healthData.addLog(sampleLog);
+                          
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Sample data added successfully'),
+                              duration: Duration(seconds: 2),
+                            ),
+                          );
+                        },
+                      ),
+                    ],
                   ),
                 ),
 
@@ -99,13 +202,91 @@ class _DataManagementScreenState extends State<DataManagementScreen> {
                   margin: const EdgeInsets.only(bottom: 16),
                   child: Column(
                     children: [
+                      // Sync Status Display
+                      if (_lastSyncTime != null || _syncStatus != null)
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: _getSyncStatusColor().withOpacity(0.1),
+                            borderRadius: const BorderRadius.only(
+                              topLeft: Radius.circular(4),
+                              topRight: Radius.circular(4),
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                _getSyncStatusIcon(),
+                                color: _getSyncStatusColor(),
+                                size: 20,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      _getSyncStatusText(),
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        color: _getSyncStatusColor(),
+                                      ),
+                                    ),
+                                    if (_lastSyncTime != null)
+                                      Text(
+                                        'Last sync: $_lastSyncTime',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: _getSyncStatusColor().withOpacity(0.7),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ListTile(
+                        leading: Icon(
+                          Icons.cloud_upload,
+                          color: preferences.primaryColor,
+                        ),
+                        title: const Text('Save & Sync to Cloud'),
+                        subtitle: const Text('Save locally first, then attempt cloud sync'),
+                        trailing: _isSyncingToCloud
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : const Icon(Icons.chevron_right),
+                        onTap: _isSyncingToCloud ? null : _syncToCloud,
+                      ),
+                      const Divider(height: 1),
+                      ListTile(
+                        leading: Icon(
+                          Icons.cloud_download,
+                          color: preferences.primaryColor,
+                        ),
+                        title: const Text('Restore from Cloud'),
+                        subtitle: const Text('Download data from Firebase'),
+                        trailing: _isRestoringFromCloud
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : const Icon(Icons.chevron_right),
+                        onTap: _isRestoringFromCloud ? null : _restoreFromCloud,
+                      ),
+                      const Divider(height: 1),
                       ListTile(
                         leading: Icon(
                           Icons.backup,
                           color: preferences.primaryColor,
                         ),
-                        title: const Text('Create Backup'),
-                        subtitle: const Text('Save a backup of your data'),
+                        title: const Text('Create Local Backup'),
+                        subtitle: const Text('Save a backup of your data locally'),
                         trailing: _isCreatingBackup
                             ? const SizedBox(
                                 width: 20,
@@ -121,8 +302,8 @@ class _DataManagementScreenState extends State<DataManagementScreen> {
                           Icons.restore,
                           color: preferences.primaryColor,
                         ),
-                        title: const Text('Restore from Backup'),
-                        subtitle: const Text('Load data from a backup'),
+                        title: const Text('Restore from Local Backup'),
+                        subtitle: const Text('Load data from a local backup'),
                         trailing: const Icon(Icons.chevron_right),
                         onTap: _showBackupList,
                       ),
@@ -145,12 +326,25 @@ class _DataManagementScreenState extends State<DataManagementScreen> {
                         subtitle: const Text('Reload data from storage'),
                         trailing: const Icon(Icons.chevron_right),
                         onTap: () async {
-                          await healthData.loadData();
+                          await healthData.forceReloadData();
                           if (mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(content: Text('Data refreshed successfully')),
                             );
                           }
+                        },
+                      ),
+                      const Divider(height: 1),
+                      ListTile(
+                        leading: Icon(
+                          Icons.bug_report,
+                          color: preferences.primaryColor,
+                        ),
+                        title: const Text('Diagnose Firestore'),
+                        subtitle: const Text('Test Firestore connectivity'),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () async {
+                          await _diagnoseFirestore();
                         },
                       ),
                       const Divider(height: 1),
@@ -513,8 +707,51 @@ class _DataManagementScreenState extends State<DataManagementScreen> {
     final logs = healthData.logs;
     final appointments = healthData.appointments;
     final medications = healthData.medications;
-    final userProfile = healthData.userProfile;
-    final condition = preferences.healthCondition;
+    var userProfile = healthData.userProfile;
+    var condition = preferences.healthCondition;
+    
+    // If Firestore profile is not available, try to load from SharedPreferences
+    if (userProfile == null) {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final name = prefs.getString('user_name');
+        final age = prefs.getString('user_age');
+        final healthCondition = prefs.getString('user_condition');
+        
+        if (name != null) {
+          final authService = Provider.of<AuthService>(context, listen: false);
+          final currentUser = authService.currentUser;
+          
+          if (currentUser != null) {
+            userProfile = UserProfile(
+              uid: currentUser.uid,
+              name: name,
+              email: currentUser.email ?? '',
+              age: age,
+              healthCondition: healthCondition,
+              createdAt: DateTime.now(),
+            );
+            print('PDF Export - Loaded profile from SharedPreferences: ${userProfile.name}');
+          }
+        }
+      } catch (e) {
+        print('PDF Export - Error loading profile from SharedPreferences: $e');
+      }
+    }
+    
+    // Use condition from SharedPreferences if available
+    if (condition.isEmpty || condition == 'None') {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final healthCondition = prefs.getString('user_condition');
+        if (healthCondition != null && healthCondition.isNotEmpty) {
+          condition = healthCondition;
+          print('PDF Export - Loaded condition from SharedPreferences: $condition');
+        }
+      } catch (e) {
+        print('PDF Export - Error loading condition from SharedPreferences: $e');
+      }
+    }
     
     final pdf = pw.Document();
     
@@ -530,15 +767,17 @@ class _DataManagementScreenState extends State<DataManagementScreen> {
             child: pw.Column(
               crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
-                                 pw.Text('MediNest Health Report', 
-                     style: pw.TextStyle(fontSize: 28, fontWeight: pw.FontWeight.bold)),
+                pw.Text('MediNest Comprehensive Health Report', 
+                    style: pw.TextStyle(fontSize: 28, fontWeight: pw.FontWeight.bold)),
                 pw.SizedBox(height: 8),
-                                 pw.Text('Generated on ${_formatDate(DateTime.now())}', 
-                     style: pw.TextStyle(fontSize: 12, color: PdfColors.grey600)),
+                pw.Text('Generated on ${_formatDate(DateTime.now())}', 
+                    style: pw.TextStyle(fontSize: 12, color: PdfColors.grey600)),
                 if (userProfile != null) ...[
                   pw.SizedBox(height: 12),
                   pw.Text('Patient: ${userProfile.name}', style: pw.TextStyle(fontSize: 16)),
                   pw.Text('Email: ${userProfile.email}', style: pw.TextStyle(fontSize: 14)),
+                  if (userProfile.age != null && userProfile.age!.isNotEmpty)
+                    pw.Text('Age: ${userProfile.age}', style: pw.TextStyle(fontSize: 14)),
                 ],
                 if (condition.isNotEmpty && condition != 'None') ...[
                   pw.SizedBox(height: 8),
@@ -554,20 +793,28 @@ class _DataManagementScreenState extends State<DataManagementScreen> {
           _buildHealthSummarySection(healthData, condition),
           pw.SizedBox(height: 20),
           
-          // Medications Section
-          _buildMedicationsSection(medications),
+          // Complete Medications Section with Status
+          _buildCompleteMedicationsSection(medications, healthData),
           pw.SizedBox(height: 20),
           
-          // Upcoming Appointments Section
-          _buildAppointmentsSection(appointments),
+          // Medication Adherence Report
+          _buildMedicationAdherenceReport(medications, healthData),
           pw.SizedBox(height: 20),
           
-          // Health Logs Section
-          _buildHealthLogsSection(logs),
+          // Complete Appointments Section (Past & Future)
+          _buildCompleteAppointmentsSection(appointments),
           pw.SizedBox(height: 20),
           
-          // Condition-Specific Vitals Section
-          _buildConditionSpecificVitalsSection(healthData, condition),
+          // Comprehensive Health Logs Section
+          _buildComprehensiveHealthLogsSection(logs),
+          pw.SizedBox(height: 20),
+          
+          // Condition-Specific Vitals Section (Enhanced)
+          _buildEnhancedConditionSpecificVitalsSection(healthData, condition),
+          pw.SizedBox(height: 20),
+          
+          // Streak and Compliance Analytics
+          _buildStreakAnalyticsSection(healthData),
           
           // Footer
           pw.SizedBox(height: 30),
@@ -577,12 +824,12 @@ class _DataManagementScreenState extends State<DataManagementScreen> {
               border: pw.Border(top: pw.BorderSide(width: 1)),
             ),
             child: pw.Column(
-                             children: [
-                 pw.Text('This report was generated by MediNest', 
-                     style: pw.TextStyle(fontSize: 10, color: PdfColors.grey700)),
-                 pw.Text('Please consult with your healthcare provider for medical advice.', 
-                     style: pw.TextStyle(fontSize: 10, color: PdfColors.grey700)),
-               ],
+              children: [
+                pw.Text('This comprehensive report was generated by MediNest', 
+                    style: pw.TextStyle(fontSize: 10, color: PdfColors.grey700)),
+                pw.Text('Please consult with your healthcare provider for medical advice.', 
+                    style: pw.TextStyle(fontSize: 10, color: PdfColors.grey700)),
+              ],
             ),
           ),
         ],
@@ -651,13 +898,18 @@ class _DataManagementScreenState extends State<DataManagementScreen> {
     );
   }
 
-  pw.Widget _buildMedicationsSection(List<Medication> medications) {
+  pw.Widget _buildCompleteMedicationsSection(List<Medication> medications, HealthDataProvider healthData) {
     final today = DateTime.now();
-    
+    final todayLogs = healthData.logs.where((log) => 
+      log.date.year == today.year && 
+      log.date.month == today.month && 
+      log.date.day == today.day
+    ).toList();
+
     return pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
       children: [
-        pw.Text('Medication Schedule & Status', style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold)),
+        pw.Text('Complete Medication Schedule & Status', style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold)),
         pw.SizedBox(height: 8),
         pw.Text('Today\'s medication status: ${_formatDate(today).split(' ')[0]}', 
             style: pw.TextStyle(fontSize: 14, color: PdfColors.grey700)),
@@ -671,7 +923,7 @@ class _DataManagementScreenState extends State<DataManagementScreen> {
             data: medications.map((med) => [
               med.name,
               med.time,
-              _getMedicationStatusForToday(med),
+              _getMedicationStatusForToday(med, todayLogs),
               med.reminderTime != null && med.reminderTime != med.time 
                   ? 'Reminder: ${med.reminderTime}' 
                   : 'No special reminder',
@@ -681,14 +933,10 @@ class _DataManagementScreenState extends State<DataManagementScreen> {
     );
   }
 
-  String _getMedicationStatusForToday(Medication medication) {
-    // This should check against today's logs to see if the medication was taken
-    // For now, we'll use the medication's taken status, but this could be enhanced
-    // to check against actual log entries for today
+  String _getMedicationStatusForToday(Medication medication, List<LogEntry> todayLogs) {
     final now = DateTime.now();
     final timeStr = medication.reminderTime ?? medication.time;
     
-    // Parse the time to see if it's past the scheduled time
     try {
       final parts = timeStr.split(' ');
       final timePart = parts[0];
@@ -718,16 +966,54 @@ class _DataManagementScreenState extends State<DataManagementScreen> {
     }
   }
 
-  pw.Widget _buildAppointmentsSection(List<Appointment> appointments) {
+  pw.Widget _buildMedicationAdherenceReport(List<Medication> medications, HealthDataProvider healthData) {
+    final today = DateTime.now();
+    final todayLogs = healthData.logs.where((log) => 
+      log.date.year == today.year && 
+      log.date.month == today.month && 
+      log.date.day == today.day
+    ).toList();
+
+    final totalMedications = medications.length;
+    final totalTodayTaken = todayLogs.where((log) => 
+      log.type == 'medication' && log.description.startsWith('Took')
+    ).length;
+    final totalTodayMissed = todayLogs.where((log) => 
+      log.type == 'medication' && log.description.startsWith('Missed')
+    ).length;
+    final adherencePercentage = totalMedications > 0 ? (totalTodayTaken * 100 / totalMedications).round() : 0;
+
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        pw.Text('Medication Adherence Report', style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold)),
+        pw.SizedBox(height: 12),
+        pw.Text('Total Medications: $totalMedications'),
+        pw.SizedBox(height: 4),
+        pw.Text('Medications Taken Today: $totalTodayTaken'),
+        pw.SizedBox(height: 4),
+        pw.Text('Medications Missed Today: $totalTodayMissed'),
+        pw.SizedBox(height: 12),
+        pw.Text('Today\'s Adherence: $adherencePercentage%', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+      ],
+    );
+  }
+
+  pw.Widget _buildCompleteAppointmentsSection(List<Appointment> appointments) {
     final upcomingAppointments = appointments
         .where((appt) => appt.dateTime.isAfter(DateTime.now()))
         .toList()
       ..sort((a, b) => a.dateTime.compareTo(b.dateTime));
     
+    final pastAppointments = appointments
+        .where((appt) => appt.dateTime.isBefore(DateTime.now()))
+        .toList()
+      ..sort((a, b) => b.dateTime.compareTo(a.dateTime));
+
     return pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
       children: [
-        pw.Text('Upcoming Appointments', style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold)),
+        pw.Text('Complete Appointments (Past & Future)', style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold)),
         pw.SizedBox(height: 12),
         if (upcomingAppointments.isEmpty)
           pw.Text('No upcoming appointments scheduled.')
@@ -742,23 +1028,37 @@ class _DataManagementScreenState extends State<DataManagementScreen> {
               appt.notes.isNotEmpty ? appt.notes : 'No notes',
             ]).toList(),
           ),
+        pw.SizedBox(height: 12),
+        if (pastAppointments.isEmpty)
+          pw.Text('No past appointments.')
+        else
+          pw.Table.fromTextArray(
+            headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+            headers: ['Date & Time', 'Title', 'Location', 'Notes'],
+            data: pastAppointments.map((appt) => [
+              _formatDate(appt.dateTime),
+              appt.title,
+              appt.location.isNotEmpty ? appt.location : 'Not specified',
+              appt.notes.isNotEmpty ? appt.notes : 'No notes',
+            ]).toList(),
+          ),
       ],
     );
   }
 
-  pw.Widget _buildHealthLogsSection(List<LogEntry> logs) {
+  pw.Widget _buildComprehensiveHealthLogsSection(List<LogEntry> logs) {
     // Sort logs by date (most recent first)
     final sortedLogs = List<LogEntry>.from(logs)
       ..sort((a, b) => b.date.compareTo(a.date));
     
-    // Filter logs that have feelings or symptoms
-    final feelingsAndSymptomsLogs = sortedLogs.where((log) => 
+    // Filter logs by type for better organization
+    final medicationLogs = sortedLogs.where((log) => log.type == 'medication').toList();
+    final feelingLogs = sortedLogs.where((log) => 
       (log.feeling != null && log.feeling!.isNotEmpty) || 
       (log.symptoms != null && log.symptoms!.isNotEmpty)
     ).toList();
-    
-    // Other health logs (medication, general logs, etc.)
     final otherLogs = sortedLogs.where((log) => 
+      log.type != 'medication' && 
       (log.feeling == null || log.feeling!.isEmpty) && 
       (log.symptoms == null || log.symptoms!.isEmpty)
     ).toList();
@@ -766,19 +1066,40 @@ class _DataManagementScreenState extends State<DataManagementScreen> {
     return pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
       children: [
+        // Medication Logs Section
+        pw.Text('Medication Logs', style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold)),
+        pw.SizedBox(height: 8),
+        pw.Text('Complete medication adherence history', 
+            style: pw.TextStyle(fontSize: 14, color: PdfColors.grey700)),
+        pw.SizedBox(height: 12),
+        if (medicationLogs.isEmpty)
+          pw.Text('No medication logs recorded.')
+        else
+          pw.Table.fromTextArray(
+            headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+            headers: ['Date & Time', 'Medication Action', 'Details'],
+            data: medicationLogs.take(20).map((log) => [ // Show last 20 medication logs
+              _formatDate(log.date),
+              log.description.startsWith('Took') ? 'Taken' : 'Missed',
+              log.description,
+            ]).toList(),
+          ),
+        
+        pw.SizedBox(height: 24),
+        
         // Patient Feelings & Symptoms Section
         pw.Text('Patient Feelings & Symptoms', style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold)),
         pw.SizedBox(height: 8),
         pw.Text('How the patient has been feeling and symptoms experienced', 
             style: pw.TextStyle(fontSize: 14, color: PdfColors.grey700)),
         pw.SizedBox(height: 12),
-        if (feelingsAndSymptomsLogs.isEmpty)
+        if (feelingLogs.isEmpty)
           pw.Text('No feelings or symptoms have been logged.')
         else
           pw.Table.fromTextArray(
             headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
             headers: ['Date', 'Feeling/Mood', 'Symptoms Experienced', 'Additional Notes'],
-            data: feelingsAndSymptomsLogs.map((log) => [
+            data: feelingLogs.take(15).map((log) => [ // Show last 15 feeling logs
               _formatDate(log.date).split(' ')[0], // Just date, no time
               log.feeling ?? 'Not specified',
               (log.symptoms != null && log.symptoms!.isNotEmpty) 
@@ -793,7 +1114,7 @@ class _DataManagementScreenState extends State<DataManagementScreen> {
         // Other Health Activities Section
         pw.Text('Other Health Activities', style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold)),
         pw.SizedBox(height: 8),
-        pw.Text('Medication logs, general health activities, and other entries', 
+        pw.Text('General health activities, vital signs, and other entries', 
             style: pw.TextStyle(fontSize: 14, color: PdfColors.grey700)),
         pw.SizedBox(height: 12),
         if (otherLogs.isEmpty)
@@ -802,7 +1123,7 @@ class _DataManagementScreenState extends State<DataManagementScreen> {
           pw.Table.fromTextArray(
             headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
             headers: ['Date & Time', 'Activity Type', 'Description'],
-            data: otherLogs.take(10).map((log) => [ // Limit to recent 10 entries
+            data: otherLogs.take(15).map((log) => [ // Show last 15 other logs
               _formatDate(log.date),
               _getActivityTypeDisplay(log.type),
               log.description,
@@ -829,29 +1150,39 @@ class _DataManagementScreenState extends State<DataManagementScreen> {
     }
   }
 
-  pw.Widget _buildConditionSpecificVitalsSection(HealthDataProvider healthData, String condition) {
+  pw.Widget _buildEnhancedConditionSpecificVitalsSection(HealthDataProvider healthData, String condition) {
     final today = DateTime.now();
     final last7Days = List.generate(7, (index) => today.subtract(Duration(days: index)));
     
     List<pw.Widget> vitalsWidgets = [];
     
-    // Add condition-specific vital tracking
-    switch (condition) {
-      case 'Hypertension':
-      case 'Heart Disease':
+    // Add condition-specific vital tracking for ALL conditions
+    switch (condition.toLowerCase()) {
+      case 'hypertension':
+      case 'heart disease':
         vitalsWidgets.add(_buildBloodPressureTable(healthData, last7Days));
         break;
-      case 'Diabetes':
+      case 'diabetes':
         vitalsWidgets.add(_buildBloodSugarTable(healthData, last7Days));
         break;
-      case 'Asthma':
-      case 'COPD':
+      case 'asthma':
+      case 'copd':
         vitalsWidgets.add(_buildPeakFlowTable(healthData, last7Days));
+        break;
+      case 'sickle cell disease':
+        vitalsWidgets.add(_buildWaterIntakeTable(healthData, last7Days));
+        vitalsWidgets.add(_buildPainLevelTable(healthData, last7Days));
+        break;
+      default:
+        // For any other condition, show water intake as general health metric
+        vitalsWidgets.add(_buildWaterIntakeTable(healthData, last7Days));
         break;
     }
     
-    // Always include water intake for all conditions
-    vitalsWidgets.add(_buildWaterIntakeTable(healthData, last7Days));
+    // Always include water intake for all conditions (except sickle cell which already has it)
+    if (!condition.toLowerCase().contains('sickle cell')) {
+      vitalsWidgets.add(_buildWaterIntakeTable(healthData, last7Days));
+    }
     
     if (vitalsWidgets.isEmpty) {
       return pw.SizedBox.shrink();
@@ -881,8 +1212,9 @@ class _DataManagementScreenState extends State<DataManagementScreen> {
             final bp = healthData.getBloodPressure(date);
             String status = '-';
             if (bp != null) {
-              if (bp[0] >= 140 || bp[1] >= 90) status = 'High';
-              else if (bp[0] >= 130 || bp[1] >= 80) status = 'Elevated';
+              if (bp[0] >= 140 || bp[1] >= 90) {
+                status = 'High';
+              } else if (bp[0] >= 130 || bp[1] >= 80) status = 'Elevated';
               else status = 'Normal';
             }
             return [
@@ -911,8 +1243,9 @@ class _DataManagementScreenState extends State<DataManagementScreen> {
             final sugar = healthData.getBloodSugar(date);
             String status = '-';
             if (sugar != null) {
-              if (sugar >= 180) status = 'High';
-              else if (sugar <= 70) status = 'Low';
+              if (sugar >= 180) {
+                status = 'High';
+              } else if (sugar <= 70) status = 'Low';
               else status = 'Normal';
             }
             return [
@@ -940,8 +1273,9 @@ class _DataManagementScreenState extends State<DataManagementScreen> {
             final peakFlow = healthData.getPeakFlow(date);
             String status = '-';
             if (peakFlow != null) {
-              if (peakFlow >= 400) status = 'Good';
-              else if (peakFlow >= 250) status = 'Fair';
+              if (peakFlow >= 400) {
+                status = 'Good';
+              } else if (peakFlow >= 250) status = 'Fair';
               else status = 'Poor';
             }
             return [
@@ -980,7 +1314,229 @@ class _DataManagementScreenState extends State<DataManagementScreen> {
     );
   }
 
+  pw.Widget _buildPainLevelTable(HealthDataProvider healthData, List<DateTime> dates) {
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        pw.Text('Pain Level Readings', style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold)),
+        pw.SizedBox(height: 8),
+        pw.Table.fromTextArray(
+          headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+          headers: ['Date', 'Pain Level', 'Status'],
+          data: dates.map((date) {
+            final painLevel = healthData.getPainLevel(date);
+            String status = '-';
+            if (painLevel != null) {
+              if (painLevel >= 7) {
+                status = 'High';
+              } else if (painLevel >= 3) status = 'Moderate';
+              else status = 'Low';
+            }
+            return [
+              '${date.day}/${date.month}/${date.year}',
+              painLevel != null ? '$painLevel/10' : 'Not recorded',
+              status,
+            ];
+          }).toList(),
+        ),
+        pw.SizedBox(height: 12),
+      ],
+    );
+  }
+
+  pw.Widget _buildStreakAnalyticsSection(HealthDataProvider healthData) {
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        pw.Text('Streak and Compliance Analytics', style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold)),
+        pw.SizedBox(height: 12),
+        pw.Text('Current Medication Streak: ${healthData.currentStreak} days'),
+        pw.SizedBox(height: 4),
+        pw.Text('Longest Medication Streak: ${healthData.longestStreak} days'),
+        pw.SizedBox(height: 4),
+        pw.Text('Total Health Logs: ${healthData.logs.length}'),
+        pw.SizedBox(height: 4),
+        pw.Text('Total Appointments: ${healthData.appointments.length}'),
+        pw.SizedBox(height: 12),
+        pw.Text('Missed Doses: ${healthData.missedDoses}'),
+        pw.SizedBox(height: 4),
+        pw.Text('Weekly Appointments: ${healthData.weeklyAppointments}'),
+      ],
+    );
+  }
+
   String _formatDate(DateTime date) {
     return '${date.day}/${date.month}/${date.year} ${date.hour}:${date.minute.toString().padLeft(2, '0')}';
+  }
+
+  Color _getSyncStatusColor() {
+    if (_syncStatus == 'success') {
+      return Colors.green;
+    } else if (_syncStatus == 'failed') {
+      return Colors.orange;
+    } else if (_syncStatus == 'error') {
+      return Colors.red;
+    } else {
+      return Colors.blue;
+    }
+  }
+
+  IconData _getSyncStatusIcon() {
+    if (_syncStatus == 'success') {
+      return Icons.check_circle;
+    } else if (_syncStatus == 'failed') {
+      return Icons.warning;
+    } else if (_syncStatus == 'error') {
+      return Icons.error;
+    } else {
+      return Icons.cloud_sync;
+    }
+  }
+
+  String _getSyncStatusText() {
+    if (_syncStatus == 'success') {
+      return '✅ Data synced to cloud successfully!';
+    } else if (_syncStatus == 'failed') {
+      return '⚠️ Cloud sync failed, but data is saved locally';
+    } else if (_syncStatus == 'error') {
+      return '❌ Sync failed. Please check your internet connection or try again later.';
+    } else {
+      return '📱 Data saved locally. Tap to attempt cloud sync.';
+    }
+  }
+
+  Future<void> _syncToCloud() async {
+    setState(() {
+      _isSyncingToCloud = true;
+      _syncStatus = null; // Clear previous status
+    });
+
+    try {
+      final healthData = Provider.of<HealthDataProvider>(context, listen: false);
+      final prefs = await SharedPreferences.getInstance();
+      final userProfile = healthData.userProfile;
+
+      if (userProfile == null) {
+        throw Exception('User profile not found. Please log in.');
+      }
+
+      // Step 1: Ensure all data is saved to SharedPreferences first
+      print('DataManagement - Ensuring all data is saved locally...');
+      await healthData.saveAllDataToSharedPreferences();
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('✅ Data saved locally! Attempting cloud sync...'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+
+      // Step 2: Attempt Firestore sync (optional)
+      try {
+        print('DataManagement - Attempting Firestore sync...');
+        await healthData.syncDataToFirestore(userProfile);
+        await _loadSyncStatus(); // Refresh status after sync
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('🎉 Data synced to cloud successfully!'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      } catch (firestoreError) {
+        print('DataManagement - Firestore sync failed: $firestoreError');
+        
+        // Update sync status to show failure
+        await prefs.setString('sync_status', 'failed');
+        await prefs.setString('last_sync_time', DateTime.now().toString());
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('⚠️ Cloud sync failed, but data is saved locally. Error: ${firestoreError.toString()}'),
+              backgroundColor: Colors.orange,
+              duration: const Duration(seconds: 4),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('❌ Error: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      setState(() {
+        _isSyncingToCloud = false;
+      });
+    }
+  }
+
+  Future<void> _restoreFromCloud() async {
+    setState(() {
+      _isRestoringFromCloud = true;
+      _syncStatus = null; // Clear previous status
+    });
+
+    try {
+      final healthData = Provider.of<HealthDataProvider>(context, listen: false);
+      final prefs = await SharedPreferences.getInstance();
+      final userProfile = healthData.userProfile;
+
+      if (userProfile == null) {
+        throw Exception('User profile not found. Please log in.');
+      }
+
+      await healthData.restoreDataFromFirestore(userProfile);
+      await _loadSyncStatus(); // Refresh status after restore
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Data restored from cloud successfully!')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Restore failed: ${e.toString()}')),
+        );
+      }
+    } finally {
+      setState(() {
+        _isRestoringFromCloud = false;
+      });
+    }
+  }
+
+  Future<void> _diagnoseFirestore() async {
+    final healthData = Provider.of<HealthDataProvider>(context, listen: false);
+    final prefs = await SharedPreferences.getInstance();
+    final userProfile = healthData.userProfile;
+
+    if (userProfile == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('User profile not found. Please log in to diagnose Firestore.')),
+      );
+      return;
+    }
+
+    try {
+      await healthData.testFirestoreConnection(userProfile);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Firestore connection successful!')),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Firestore connection failed: ${e.toString()}')),
+      );
+    }
   }
 } 

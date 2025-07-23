@@ -6,7 +6,6 @@ import 'screens/onboarding_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/health_tips_screen.dart';
 import 'screens/auth_screen.dart';
-import 'services/shared_prefs_service.dart';
 import 'providers/health_data_provider.dart';
 import 'providers/user_preferences_provider.dart';
 import 'services/notification_service.dart';
@@ -20,27 +19,40 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
-  // Enable Firestore offline persistence
-  FirebaseFirestore.instance.settings = const Settings(persistenceEnabled: true);
+  
+  try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+    print('Firebase - ✅ Firebase initialized successfully');
+  } catch (e) {
+    print('Firebase - ❌ Firebase initialization failed: $e');
+  }
+  
+  // Configure Firestore settings
+  try {
+    FirebaseFirestore.instance.settings = const Settings(
+      persistenceEnabled: true, // Enable persistence for better connectivity
+      cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
+    );
+    print('Firestore - ✅ Firestore settings configured');
+  } catch (e) {
+    print('Firestore - ❌ Firestore settings configuration failed: $e');
+  }
+  
   await NotificationService().init();
   if (await Permission.notification.isDenied) {
     await Permission.notification.request();
   }
+  
   runApp(
     MultiProvider(
       providers: [
         Provider<AuthService>(create: (_) => AuthService()),
         Provider<FirestoreService>(create: (_) => FirestoreService()),
         ChangeNotifierProvider(create: (_) => UserPreferencesProvider()),
-        // This provider depends on AuthService and FirestoreService
-        ChangeNotifierProxyProvider2<AuthService, FirestoreService, HealthDataProvider>(
-          create: (context) => HealthDataProvider(),
-          update: (context, auth, firestore, previousHealthData) =>
-              previousHealthData!..update(auth, firestore),
-        ),
+        // Simplified provider setup - create HealthDataProvider directly
+        ChangeNotifierProvider(create: (_) => HealthDataProvider()),
       ],
       child: const MyApp(),
     ),
